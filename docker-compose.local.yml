@@ -1,0 +1,62 @@
+# ── Local-build override ─────────────────────────────────────────────
+# Usage:  docker-compose -f docker-compose.yml -f docker-compose.local.yml up -d
+#
+# This override replaces the multi-stage Maven Dockerfiles with a simple
+# runtime-only image that copies the pre-built JAR from the host.
+# Run `mvn clean package -DskipTests` locally before using this file.
+
+services:
+  service-registry:
+    build:
+      context: .
+      dockerfile: service-registry/Dockerfile.local
+
+  admin-server:
+    build:
+      context: .
+      dockerfile: admin-server/Dockerfile.local
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile.local
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile.local
+
+  room-service:
+    build:
+      context: .
+      dockerfile: room-service/Dockerfile.local
+
+  message-service:
+    build:
+      context: .
+      dockerfile: message-service/Dockerfile.local
+
+  media-service:
+    build:
+      context: .
+      dockerfile: media-service/Dockerfile.local
+
+  presence-service:
+    build:
+      context: .
+      dockerfile: presence-service/Dockerfile.local
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile.local
+
+  websocket-service:
+    build:
+      context: .
+      dockerfile: websocket-service/Dockerfile.local
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile.local
