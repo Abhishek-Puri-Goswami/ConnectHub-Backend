@@ -1,0 +1,72 @@
+﻿server:
+  port: 8086
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+  application:
+    name: notification-service
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/connecthub_notification?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${MYSQL_USER:your_mysql_user}
+    password: ${VAR:your_password}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:no.reply.connecthub@gmail.com}
+    password: ${VAR:your_password}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: true
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
+
+# Twilio SMS configuration
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID:your_value}
+  auth-token: ${TWILIO_AUTH_TOKEN:your_value}
+  from-number: ${TWILIO_FROM_NUMBER:your_value}
+eureka:
+  client:
+    service-url:
+      defaultZone: http://your_user:your_password@${EUREKA_HOST:localhost}:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,loggers,env
+  endpoint:
+    health:
+      show-details: always
+
+  boot:
+    admin:
+      client:
+        url: http://${ADMIN_SERVER_HOST:localhost}:9090
+        username: ${ADMIN_USER:your_admin_user}
+        password: ${VAR:your_password}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+
+
+
