@@ -1,0 +1,156 @@
+﻿server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+      routes:
+        # â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        - id: oauth2-route
+          uri: lb://auth-service
+          predicates: [Path=/oauth2/**]
+        - id: oauth2-callback-route
+          uri: lb://auth-service
+          predicates: [Path=/login/oauth2/**]
+        - id: auth-service
+          uri: lb://auth-service
+          predicates: [Path=/api/v1/auth/**]
+        # â”€â”€ API-docs proxy routes (Swagger aggregation) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        - id: auth-service-docs
+          uri: lb://auth-service
+          predicates: [Path=/auth-docs/**]
+          filters:
+            - RewritePath=/auth-docs/(?<remaining>.*), /${remaining}
+        - id: room-service-docs
+          uri: lb://room-service
+          predicates: [Path=/room-docs/**]
+          filters:
+            - RewritePath=/room-docs/(?<remaining>.*), /${remaining}
+        - id: message-service-docs
+          uri: lb://message-service
+          predicates: [Path=/message-docs/**]
+          filters:
+            - RewritePath=/message-docs/(?<remaining>.*), /${remaining}
+        - id: media-service-docs
+          uri: lb://media-service
+          predicates: [Path=/media-docs/**]
+          filters:
+            - RewritePath=/media-docs/(?<remaining>.*), /${remaining}
+        - id: presence-service-docs
+          uri: lb://presence-service
+          predicates: [Path=/presence-docs/**]
+          filters:
+            - RewritePath=/presence-docs/(?<remaining>.*), /${remaining}
+        - id: notification-service-docs
+          uri: lb://notification-service
+          predicates: [Path=/notification-docs/**]
+          filters:
+            - RewritePath=/notification-docs/(?<remaining>.*), /${remaining}
+        - id: websocket-service-docs
+          uri: lb://websocket-service
+          predicates: [Path=/websocket-docs/**]
+          filters:
+            - RewritePath=/websocket-docs/(?<remaining>.*), /${remaining}
+        - id: payment-service-docs
+          uri: lb://payment-service
+          predicates: [Path=/payment-docs/**]
+          filters:
+            - RewritePath=/payment-docs/(?<remaining>.*), /${remaining}
+        # â”€â”€ Business routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        - id: room-service
+          uri: lb://room-service
+          predicates: [Path=/api/v1/rooms/**]
+        - id: message-service
+          uri: lb://message-service
+          predicates: [Path=/api/v1/messages/**]
+        - id: media-service
+          uri: lb://media-service
+          predicates: [Path=/api/v1/media/**]
+        - id: presence-service
+          uri: lb://presence-service
+          predicates: [Path=/api/v1/presence/**]
+        - id: notification-service
+          uri: lb://notification-service
+          predicates: [Path=/api/v1/notifications/**]
+        - id: websocket-service-api
+          uri: lb://websocket-service
+          predicates: [Path=/api/v1/ws/**]
+        - id: websocket-service
+          uri: lb:ws://websocket-service
+          predicates: [Path=/ws/**]
+        - id: payment-service
+          uri: lb://payment-service
+          predicates: [Path=/api/v1/payments/**]
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+  boot:
+    admin:
+      client:
+        url: http://${ADMIN_SERVER_HOST:localhost}:9090
+        username: ${ADMIN_USER:your_admin_user}
+        password: ${ADMIN_PASSWORD:your_value}
+
+jwt:
+  secret: ${JWT_SECRET:your_value}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://your_user:your_password@${EUREKA_HOST:localhost}:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway,metrics,loggers
+  endpoint:
+    health:
+      show-details: always
+
+# â”€â”€ Swagger Aggregation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Each service exposes /v3/api-docs. The gateway proxies them under /xxx-docs/**
+# The aggregated Swagger UI is available at: http://localhost:8080/swagger-ui.html
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    config-url: /v3/api-docs/swagger-config
+    urls:
+      - name: auth-service
+        url: /auth-docs/v3/api-docs
+      - name: room-service
+        url: /room-docs/v3/api-docs
+      - name: message-service
+        url: /message-docs/v3/api-docs
+      - name: media-service
+        url: /media-docs/v3/api-docs
+      - name: presence-service
+        url: /presence-docs/v3/api-docs
+      - name: notification-service
+        url: /notification-docs/v3/api-docs
+      - name: websocket-service
+        url: /websocket-docs/v3/api-docs
+      - name: payment-service
+        url: /payment-docs/v3/api-docs
+
+
+
