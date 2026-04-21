@@ -1,98 +1,74 @@
-﻿# ConnectHub v2 â€” Production-Ready Real-Time Chat Backend
+# ConnectHub v2 - Production-Ready Real-Time Chat Backend
 
-## What's New in v2
-- **OTP email verification** on registration (same-page flow, 5min expiry, 60s resend cooldown, max 5 attempts)
-- **Forgot password** with OTP â†’ reset token â†’ new password flow
-- **Strong input validation** â€” passwords require uppercase, lowercase, digit, special char (8-72 chars)
-- **XSS sanitization** on all user content (messages, bios, room names)
-- **API versioning** â€” all routes prefixed with `/api/v1/`
-- **Flyway migrations** â€” schema versioned, no more `ddl-auto=update`
-- **Logback** with console + rolling file appenders + MDC trace IDs
-- **Cursor-based pagination** for messages (no duplicate/missed messages)
-- **Redis Pub/Sub** email pipeline (auth publishes â†’ notification subscribes â†’ sends)
-- **Rate limiting** at gateway (100 req/min per user via Redis)
-- **Circuit breaker ready** (Resilience4j in gateway)
-- **Audit logging** for all admin actions
-- **JaCoCo** 80% coverage target + SonarQube integration
-- **Gateway-only external access** (services use `expose:` not `ports:` in Docker)
-- **@LoadBalanced RestTemplate** for service-to-service calls via Eureka
+## Overview
+ConnectHub is a scalable microservices-based backend for a real-time chat application, implementing modern security and performance patterns.
+
+## Features and Enhancements
+- **OTP Verification**: Email verification for registration with cooldowns and attempt limits.
+- **Advanced Authentication**: Forgot password flow with OTP, reset tokens, and secure password requirements.
+- **Security**: XSS sanitization on all user content and API versioning (prefixed with `/api/v1/`).
+- **Database Management**: Flyway migrations for versioned schemas.
+- **Logging & Tracing**: Logback with console and rolling file appenders, including MDC trace IDs.
+- **Performance**: Cursor-based pagination for seamless message loading and Redis-backed rate limiting.
+- **Messaging**: Redis Pub/Sub pipeline for asynchronous notifications.
+- **Resiliency**: Load-balanced service communication via Eureka and Resilience4j-ready gateway.
+- **Quality Assurance**: Integrated JaCoCo target for 80% code coverage and SonarQube analysis.
 
 ## Architecture
-```
-Internet â†’ ALB â†’ API Gateway (8080) â†’ Eureka Discovery
-                       â†“
-    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-    â”‚   auth (8081)    â”‚  room (8082)  msg (8083) â”‚
-    â”‚   media (8084)   â”‚  presence (8085/Redis)    â”‚
-    â”‚   notif (8086)   â”‚  websocket (8087/STOMP)   â”‚
-    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-              â†“                    â†“
-         MySQL (per-svc)     Redis (shared)
-```
+Communications flow from the user through an Application Load Balancer (ALB) to the API Gateway, which handles discovery via Eureka.
 
-## Services
-| Service | Port | DB | Key Features |
-|---------|------|----|------|
-| service-registry | 8761 | â€” | Eureka discovery |
-| api-gateway | 8080 | Redis | JWT filter, rate limit, trace ID, circuit breaker |
-| auth-service | 8081 | MySQL+Redis | Register+OTP, login, OAuth2, forgot password, audit |
-| room-service | 8082 | MySQL | Rooms, members, roles, mute, pin |
-| message-service | 8083 | MySQL | Messages, cursor pagination, reactions, XSS sanitize |
-| media-service | 8084 | MySQL+S3 | Upload, thumbnails, presigned URLs |
-| presence-service | 8085 | Redis | Online tracking, stale cleanup |
-| notification-service | 8086 | MySQL+Redis | Email (OTP/welcome), in-app notifications |
-| websocket-service | 8087 | Redis | STOMP/SockJS, Redis Pub/Sub broadcast |
+- **Frontend Interface** (Port 5173)
+- **API Gateway** (Port 8080)
+- **Service Registry** (Port 8761)
+- **Core Microservices**:
+    - Auth Service (Port 8081)
+    - Room Service (Port 8082)
+    - Message Service (Port 8083)
+    - Media Service (Port 8084)
+    - Presence Service (Port 8085)
+    - Notification Service (Port 8086)
+    - WebSocket Service (Port 8087)
+
+## Tech Stack
+- **Database**: MySQL (per service) and Redis (shared).
+- **Communication**: REST APIs and STOMP over WebSocket.
+- **Service Discovery**: Eureka.
+- **Containerization**: Docker Compose.
 
 ## Quick Start
 ```bash
-# Build all services
+# Build all microservices
 mvn clean package -DskipTests
 
-# Start everything
+# Start the infrastructure
 docker-compose up -d
 
-# Check Eureka
-open http://localhost:8761
-
-# Test registration
-curl -X POST http://localhost:8080/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"john","email":"john@test.com","password":"Test@1234","fullName":"John Doe"}'
-
-# Swagger UI (per service, access directly in dev)
-open http://localhost:8081/swagger-ui.html
+# Access Eureka Dashboard
+http://localhost:8761
 ```
 
-## Registration Flow
-```
-POST /api/v1/auth/register           â†’ 201 {message, email}
-POST /api/v1/auth/verify-registration-otp â†’ 200 {accessToken, refreshToken, user}
-POST /api/v1/auth/resend-registration-otp â†’ 200 {message, cooldownSeconds}
-```
+## API Flows
 
-## Password Reset Flow
-```
-POST /api/v1/auth/forgot-password    â†’ 200 {message} (always succeeds)
-POST /api/v1/auth/verify-reset-otp   â†’ 200 {data: resetToken}
-POST /api/v1/auth/reset-password     â†’ 200 {message}
-```
+### Registration
+- `POST /api/v1/auth/register` - Submit user details.
+- `POST /api/v1/auth/verify-registration-otp` - Verify account via email OTP.
+- `POST /api/v1/auth/resend-registration-otp` - Request new OTP.
 
-## WebSocket Connection
-```javascript
-const socket = new SockJS("http://localhost:8080/ws");
-const client = Stomp.over(socket);
-client.connect({Authorization: "Bearer <jwt>"}, () => {
-  client.subscribe("/topic/room/<roomId>", msg => console.log(JSON.parse(msg.body)));
-  client.send("/app/chat.send", {}, JSON.stringify({roomId:"<id>",content:"Hello!",type:"TEXT"}));
-});
-```
+### Password Management
+- `POST /api/v1/auth/forgot-password` - Trigger reset flow.
+- `POST /api/v1/auth/verify-reset-otp` - Validate OTP to get reset token.
+- `POST /api/v1/auth/reset-password` - Set new password.
 
 ## Project Evolution Track
-- [x] Infrastructure Setup
-- [x] Admin Server
-- [x] API Gateway
-- [x] Auth Service
-<<<<<<< HEAD
-- [x] Media Service
-=======
->>>>>>> service/auth-service
+- [x] Infrastructure and Configuration Setup
+- [x] Admin Server Implementation
+- [x] API Gateway Configuration
+- [x] Auth Service with OAuth2 and OTP
+- [x] Media Service (S3 Integration)
+- [x] Message Service (Cursor Pagination)
+- [x] Notification Service (Email & SMS)
+- [x] Payment Service
+- [x] Presence Service (Redis)
+- [x] Room Service (Management)
+- [x] Service Registry (Eureka)
+- [x] WebSocket Service (Real-time)
