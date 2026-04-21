@@ -1,0 +1,5 @@
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+COPY websocket-service/target/*.jar app.jar
+EXPOSE 8087
+ENTRYPOINT ["java", "-Xmx512m", "-jar", "app.jar"]
