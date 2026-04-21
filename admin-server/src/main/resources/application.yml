@@ -1,0 +1,44 @@
+﻿server:
+  port: 9090
+
+spring:
+  application:
+    name: admin-server
+  security:
+    user:
+      name: ${ADMIN_USER:admin}
+      password: ${ADMIN_PASSWORD:your_value}
+  boot:
+    admin:
+      ui:
+        title: "ConnectHub Admin"
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://your_user:your_password@${EUREKA_HOST:localhost}:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: ConnectHub Admin Server
+    version: 1.0.0
+
+
+
+
