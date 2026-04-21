@@ -1,0 +1,97 @@
+﻿server:
+  port: 8081
+  forward-headers-strategy: framework
+
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+  application:
+    name: auth-service
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/connecthub_auth?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${MYSQL_USER:your_mysql_user}
+    password: ${MYSQL_PASSWORD:your_value}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+
+  # ===== OAuth2 Client Configuration =====
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:your_value}
+            client-secret: ${GOOGLE_CLIENT_SECRET:your_value}
+            scope: email, profile
+            redirect-uri: "${GATEWAY_URL:http://localhost:8080}/login/oauth2/code/{registrationId}"
+          github:
+            client-id: ${GITHUB_CLIENT_ID:your_value}
+            client-secret: ${GITHUB_CLIENT_SECRET:your_value}
+            scope: user:email, read:user
+            redirect-uri: "${GATEWAY_URL:http://localhost:8080}/login/oauth2/code/{registrationId}"
+        provider:
+          google:
+            authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
+            token-uri: https://oauth2.googleapis.com/token
+            user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo
+            user-name-attribute: sub
+          github:
+            authorization-uri: https://github.com/login/oauth/authorize
+            token-uri: https://github.com/login/oauth/access_token
+            user-info-uri: https://api.github.com/user
+            user-name-attribute: id
+
+jwt:
+  secret: ${JWT_SECRET:your_value}
+  access-token-expiry: 86400000
+  refresh-token-expiry: 604800000
+
+oauth2:
+  redirect:
+    frontend-url: ${FRONTEND_URL:http://localhost:5173}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://your_user:your_password@${EUREKA_HOST:localhost}:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+  boot:
+    admin:
+      client:
+        url: http://${ADMIN_SERVER_HOST:localhost}:9090
+        username: ${ADMIN_USER:your_admin_user}
+        password: ${ADMIN_PASSWORD:your_value}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,loggers,env
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+
+
+
+
