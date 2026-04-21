@@ -1,15 +1,15 @@
-# ConnectHub v2 — Production-Ready Real-Time Chat Backend
+﻿# ConnectHub v2 â€” Production-Ready Real-Time Chat Backend
 
 ## What's New in v2
 - **OTP email verification** on registration (same-page flow, 5min expiry, 60s resend cooldown, max 5 attempts)
-- **Forgot password** with OTP → reset token → new password flow
-- **Strong input validation** — passwords require uppercase, lowercase, digit, special char (8-72 chars)
+- **Forgot password** with OTP â†’ reset token â†’ new password flow
+- **Strong input validation** â€” passwords require uppercase, lowercase, digit, special char (8-72 chars)
 - **XSS sanitization** on all user content (messages, bios, room names)
-- **API versioning** — all routes prefixed with `/api/v1/`
-- **Flyway migrations** — schema versioned, no more `ddl-auto=update`
+- **API versioning** â€” all routes prefixed with `/api/v1/`
+- **Flyway migrations** â€” schema versioned, no more `ddl-auto=update`
 - **Logback** with console + rolling file appenders + MDC trace IDs
 - **Cursor-based pagination** for messages (no duplicate/missed messages)
-- **Redis Pub/Sub** email pipeline (auth publishes → notification subscribes → sends)
+- **Redis Pub/Sub** email pipeline (auth publishes â†’ notification subscribes â†’ sends)
 - **Rate limiting** at gateway (100 req/min per user via Redis)
 - **Circuit breaker ready** (Resilience4j in gateway)
 - **Audit logging** for all admin actions
@@ -19,21 +19,21 @@
 
 ## Architecture
 ```
-Internet → ALB → API Gateway (8080) → Eureka Discovery
-                       ↓
-    ┌──────────────────┼──────────────────────────┐
-    │   auth (8081)    │  room (8082)  msg (8083) │
-    │   media (8084)   │  presence (8085/Redis)    │
-    │   notif (8086)   │  websocket (8087/STOMP)   │
-    └──────────────────┴──────────────────────────┘
-              ↓                    ↓
+Internet â†’ ALB â†’ API Gateway (8080) â†’ Eureka Discovery
+                       â†“
+    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+    â”‚   auth (8081)    â”‚  room (8082)  msg (8083) â”‚
+    â”‚   media (8084)   â”‚  presence (8085/Redis)    â”‚
+    â”‚   notif (8086)   â”‚  websocket (8087/STOMP)   â”‚
+    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+              â†“                    â†“
          MySQL (per-svc)     Redis (shared)
 ```
 
 ## Services
 | Service | Port | DB | Key Features |
 |---------|------|----|------|
-| service-registry | 8761 | — | Eureka discovery |
+| service-registry | 8761 | â€” | Eureka discovery |
 | api-gateway | 8080 | Redis | JWT filter, rate limit, trace ID, circuit breaker |
 | auth-service | 8081 | MySQL+Redis | Register+OTP, login, OAuth2, forgot password, audit |
 | room-service | 8082 | MySQL | Rooms, members, roles, mute, pin |
@@ -65,16 +65,16 @@ open http://localhost:8081/swagger-ui.html
 
 ## Registration Flow
 ```
-POST /api/v1/auth/register           → 201 {message, email}
-POST /api/v1/auth/verify-registration-otp → 200 {accessToken, refreshToken, user}
-POST /api/v1/auth/resend-registration-otp → 200 {message, cooldownSeconds}
+POST /api/v1/auth/register           â†’ 201 {message, email}
+POST /api/v1/auth/verify-registration-otp â†’ 200 {accessToken, refreshToken, user}
+POST /api/v1/auth/resend-registration-otp â†’ 200 {message, cooldownSeconds}
 ```
 
 ## Password Reset Flow
 ```
-POST /api/v1/auth/forgot-password    → 200 {message} (always succeeds)
-POST /api/v1/auth/verify-reset-otp   → 200 {data: resetToken}
-POST /api/v1/auth/reset-password     → 200 {message}
+POST /api/v1/auth/forgot-password    â†’ 200 {message} (always succeeds)
+POST /api/v1/auth/verify-reset-otp   â†’ 200 {data: resetToken}
+POST /api/v1/auth/reset-password     â†’ 200 {message}
 ```
 
 ## WebSocket Connection
@@ -86,3 +86,13 @@ client.connect({Authorization: "Bearer <jwt>"}, () => {
   client.send("/app/chat.send", {}, JSON.stringify({roomId:"<id>",content:"Hello!",type:"TEXT"}));
 });
 ```
+
+## Project Evolution Track
+- [x] Infrastructure Setup
+- [x] Admin Server
+- [x] API Gateway
+- [x] Auth Service
+<<<<<<< HEAD
+- [x] Media Service
+=======
+>>>>>>> service/auth-service
