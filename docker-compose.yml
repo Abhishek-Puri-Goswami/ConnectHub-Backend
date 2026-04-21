@@ -1,0 +1,318 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: connecthub-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: Anaya@123
+    ports: ["3307:3306"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-databases.sql:/docker-entrypoint-initdb.d/init.sql
+    networks: [connecthub]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: connecthub-kafka
+    expose: ["9092"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    networks: [connecthub]
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: connecthub-redis
+    ports: ["6379:6379"]
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes: [redis_data:/data]
+    networks: [connecthub]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  service-registry:
+    build:
+      context: .
+      dockerfile: service-registry/Dockerfile
+    container_name: connecthub-registry
+    ports: ["8761:8761"]
+    environment:
+      ADMIN_SERVER_HOST: admin-server
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+    networks: [connecthub]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8761/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── Spring Boot Admin ─────────────────────────────────────────────────────────
+  admin-server:
+    build:
+      context: .
+      dockerfile: admin-server/Dockerfile
+    container_name: connecthub-admin
+    ports: ["19090:9090"]
+    environment:
+      EUREKA_HOST: service-registry
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+    depends_on:
+      service-registry: { condition: service_healthy }
+    networks: [connecthub]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    container_name: connecthub-gateway
+    ports: ["8080:8080"]
+    environment:
+      EUREKA_HOST: service-registry
+      REDIS_HOST: redis
+      JWT_SECRET: ${JWT_SECRET}
+      KAFKA_BROKERS: kafka:9092
+      ADMIN_SERVER_HOST: admin-server
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+    depends_on:
+      service-registry: { condition: service_healthy }
+      admin-server: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [connecthub]
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    container_name: connecthub-auth
+    expose: ["8081"]
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_USER: ${MYSQL_USER:-parents}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-parents@top}
+      REDIS_HOST: redis
+      EUREKA_HOST: service-registry
+      JWT_SECRET: ${JWT_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      KAFKA_BROKERS: kafka:9092
+      ADMIN_SERVER_HOST: admin-server
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+      PLATFORM_ADMIN_EMAIL: ${PLATFORM_ADMIN_EMAIL:-admin@connecthub.app}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:-Admin@ConnectHub2024!}
+    depends_on:
+      kafka: { condition: service_healthy }
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      service-registry: { condition: service_healthy }
+      admin-server: { condition: service_healthy }
+    networks: [connecthub]
+
+  room-service:
+    build:
+      context: .
+      dockerfile: room-service/Dockerfile
+    container_name: connecthub-room
+    expose: ["8082"]
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_USER: ${MYSQL_USER:-parents}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-parents@top}
+      EUREKA_HOST: service-registry
+      REDIS_HOST: redis
+      KAFKA_BROKERS: kafka:9092
+      ADMIN_SERVER_HOST: admin-server
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+    depends_on:
+      kafka: { condition: service_healthy }
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      service-registry: { condition: service_healthy }
+      admin-server: { condition: service_healthy }
+    networks: [connecthub]
+
+  message-service:
+    build:
+      context: .
+      dockerfile: message-service/Dockerfile
+    container_name: connecthub-message
+    expose: ["8083"]
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_USER: ${MYSQL_USER:-parents}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-parents@top}
+      EUREKA_HOST: service-registry
+      REDIS_HOST: redis
+      KAFKA_BROKERS: kafka:9092
+      ADMIN_SERVER_HOST: admin-server
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+    depends_on:
+      kafka: { condition: service_healthy }
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      service-registry: { condition: service_healthy }
+      admin-server: { condition: service_healthy }
+    networks: [connecthub]
+
+  media-service:
+    build:
+      context: .
+      dockerfile: media-service/Dockerfile
+    container_name: connecthub-media
+    expose: ["8084"]
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_USER: ${MYSQL_USER:-parents}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-parents@top}
+      REDIS_HOST: redis
+      EUREKA_HOST: service-registry
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-AKIA4QN4IBPDDMF52656}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-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}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-connecthub-media-bucket}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      KAFKA_BROKERS: kafka:9092
+      ADMIN_SERVER_HOST: admin-server
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+    depends_on:
+      kafka: { condition: service_healthy }
+      mysql: { condition: service_healthy }
+      service-registry: { condition: service_healthy }
+      admin-server: { condition: service_healthy }
+    networks: [connecthub]
+
+  presence-service:
+    build:
+      context: .
+      dockerfile: presence-service/Dockerfile
+    container_name: connecthub-presence
+    expose: ["8085"]
+    environment:
+      REDIS_HOST: redis
+      EUREKA_HOST: service-registry
+      ADMIN_SERVER_HOST: admin-server
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+    depends_on:
+      redis: { condition: service_healthy }
+      service-registry: { condition: service_healthy }
+      admin-server: { condition: service_healthy }
+    networks: [connecthub]
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    container_name: connecthub-notification
+    expose: ["8086"]
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_USER: ${MYSQL_USER:-parents}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-parents@top}
+      REDIS_HOST: redis
+      EUREKA_HOST: service-registry
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      KAFKA_BROKERS: kafka:9092
+      ADMIN_SERVER_HOST: admin-server
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-+15072644512}
+    depends_on:
+      kafka: { condition: service_healthy }
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      service-registry: { condition: service_healthy }
+      admin-server: { condition: service_healthy }
+    networks: [connecthub]
+
+  websocket-service:
+    build:
+      context: .
+      dockerfile: websocket-service/Dockerfile
+    container_name: connecthub-websocket
+    expose: ["8087"]
+    environment:
+      REDIS_HOST: redis
+      EUREKA_HOST: service-registry
+      JWT_SECRET: ${JWT_SECRET}
+      KAFKA_BROKERS: kafka:9092
+      ADMIN_SERVER_HOST: admin-server
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+    depends_on:
+      kafka: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      service-registry: { condition: service_healthy }
+      admin-server: { condition: service_healthy }
+    networks: [connecthub]
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+    container_name: connecthub-payment
+    expose: ["8088"]
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_USER: ${MYSQL_USER:-parents}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-parents@top}
+      EUREKA_HOST: service-registry
+      KAFKA_BROKERS: kafka:9092
+      JWT_SECRET: ${JWT_SECRET}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-rzp_test_SeQvYvdnQftdy3}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-cv4EB5dYNqhl2WfdeBH8cn2w}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-placeholder}
+      ADMIN_SERVER_HOST: admin-server
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+    depends_on:
+      kafka: { condition: service_healthy }
+      mysql: { condition: service_healthy }
+      service-registry: { condition: service_healthy }
+      admin-server: { condition: service_healthy }
+    networks: [connecthub]
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  connecthub:
+    driver: bridge

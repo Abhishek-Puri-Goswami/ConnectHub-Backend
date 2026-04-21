@@ -1,0 +1,29 @@
+# ── SonarQube for local code analysis ────────────────────────────────
+# Usage:  docker-compose -f docker-compose.sonarqube.yml up -d
+# UI:     http://localhost:9000  (default creds: admin / admin)
+
+services:
+  sonarqube:
+    image: sonarqube:community
+    container_name: connecthub-sonarqube
+    ports:
+      - "9000:9000"
+    environment:
+      # Elasticsearch heap — keep low for local dev
+      SONAR_SEARCH_JAVAADDITIONALOPTS: "-Dnode.store.allow_mmap=false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    restart: unless-stopped
+
+volumes:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:
