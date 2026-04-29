@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
@@ -13,6 +14,7 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * P3.5 — Hardened Kafka listener for subscription status events.
@@ -29,6 +31,7 @@ public class KafkaSubscriptionListener {
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
     private final UserProfileCacheService profileCache;
+    private final StringRedisTemplate redis;
 
     @SneakyThrows
     @KafkaListener(
@@ -54,6 +57,8 @@ public class KafkaSubscriptionListener {
             user.setSubscriptionTier(status);
             userRepository.save(user);
             profileCache.evict(userId);
+            // Override the stale subscriptionTier claim in any active JWTs for 25h
+            redis.opsForValue().set("sub:tier:" + userId, status, 25, TimeUnit.HOURS);
             log.info("User {} subscription updated to {} ({}[{}]@{})",
                     userId, status, topic, partition, offset);
         }, () -> log.warn("User {} not found for subscription update — skipping", userId));
