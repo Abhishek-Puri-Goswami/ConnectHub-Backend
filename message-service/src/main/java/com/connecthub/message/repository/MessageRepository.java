@@ -6,11 +6,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface MessageRepository extends JpaRepository<Message, String> {
-    // Cursor-based: get messages older than cursor
+    Optional<Message> findByMessageIdAndRoomId(String messageId, String roomId);
+    // Cursor-based pagination including deleted (frontend renders placeholder for deleted)
+    List<Message> findByRoomIdAndSentAtBeforeOrderBySentAtDesc(String roomId, LocalDateTime before, Pageable pageable);
+    // First page including deleted
+    List<Message> findByRoomIdOrderBySentAtDesc(String roomId, Pageable pageable);
+    // Legacy filtered queries kept for unread counting only
     List<Message> findByRoomIdAndIsDeletedFalseAndSentAtBeforeOrderBySentAtDesc(String roomId, LocalDateTime before, Pageable pageable);
-    // First page (no cursor)
     List<Message> findByRoomIdAndIsDeletedFalseOrderBySentAtDesc(String roomId, Pageable pageable);
     long countByRoomIdAndSentAtAfterAndIsDeletedFalse(String roomId, LocalDateTime after);
     long countByRoomIdAndIsDeletedFalse(String roomId);
