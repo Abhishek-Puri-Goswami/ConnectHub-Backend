@@ -41,9 +41,9 @@ public class Subscription {
     @Builder.Default
     private String status = "ACTIVE";
 
-    /** Razorpay subscription id for recurring billing management. */
-    @Column(name = "razorpay_sub_id", length = 100)
-    private String razorpaySubId;
+    /** Razorpay order id for the one-time PRO payment. */
+    @Column(name = "razorpay_order_id", length = 100)
+    private String razorpayOrderId;
 
     @Column(nullable = false)
     private LocalDateTime startDate;
