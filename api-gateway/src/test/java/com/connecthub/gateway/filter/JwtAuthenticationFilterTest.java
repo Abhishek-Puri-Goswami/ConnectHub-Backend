@@ -5,6 +5,8 @@ import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.core.ReactiveValueOperations;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
@@ -19,6 +21,7 @@ import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 class JwtAuthenticationFilterTest {
@@ -28,8 +31,14 @@ class JwtAuthenticationFilterTest {
     private final String rawSecret = "fUfwkEaeomu7puBOIl0ftR50UPF4CBPUDxZ0lcaGXL2hY3Zai4DS4YO7l4902IJsKVdHyNjdpCL4LX7IGkw2qg==";
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
-        filter = new JwtAuthenticationFilter();
+        ReactiveStringRedisTemplate redisTemplate = mock(ReactiveStringRedisTemplate.class);
+        ReactiveValueOperations<String, String> ops = mock(ReactiveValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(ops);
+        when(ops.get(anyString())).thenReturn(Mono.empty());
+
+        filter = new JwtAuthenticationFilter(redisTemplate);
         ReflectionTestUtils.setField(filter, "jwtSecret", rawSecret);
         chain = mock(GatewayFilterChain.class);
         when(chain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());

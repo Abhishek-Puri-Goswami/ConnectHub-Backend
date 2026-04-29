@@ -21,58 +21,58 @@ import java.util.concurrent.TimeUnit;
  * AuthServiceImpl — Core Authentication Business Logic
  *
  * PURPOSE:
- *   This is the main service class that implements all authentication flows
- *   in the auth-service. It handles registration, email/phone OTP flows,
- *   password login, guest login, OAuth2 callbacks, session management,
- *   forgot/reset password, and user profile management.
+ * This is the main service class that implements all authentication flows
+ * in the auth-service. It handles registration, email/phone OTP flows,
+ * password login, guest login, OAuth2 callbacks, session management,
+ * forgot/reset password, and user profile management.
  *
- *   It is annotated with @Transactional at the class level, meaning every
- *   public method runs inside a database transaction by default. Methods that
- *   only read data override this with @Transactional(readOnly = true) for
- *   a small performance gain (MySQL can use a read-only optimized execution path).
+ * It is annotated with @Transactional at the class level, meaning every
+ * public method runs inside a database transaction by default. Methods that
+ * only read data override this with @Transactional(readOnly = true) for
+ * a small performance gain (MySQL can use a read-only optimized execution
+ * path).
  *
  * DEPENDENCIES:
- *   - UserRepository      — JPA repository for reading/writing User entities to MySQL
- *   - PasswordEncoder     — BCrypt encoder for hashing and verifying passwords
- *   - JwtUtil             — generates and validates JWT tokens
- *   - OtpService          — Redis-backed OTP generation, storage, verification
- *   - StringRedisTemplate — direct Redis access for token blacklist
- *   - EmailEventPublisher — publishes OTP/welcome events to Redis pub/sub
- *   - UserProfileCacheService — Redis cache for user profile data
+ * - UserRepository — JPA repository for reading/writing User entities to MySQL
+ * - PasswordEncoder — BCrypt encoder for hashing and verifying passwords
+ * - JwtUtil — generates and validates JWT tokens
+ * - OtpService — Redis-backed OTP generation, storage, verification
+ * - StringRedisTemplate — direct Redis access for token blacklist
+ * - EmailEventPublisher — publishes OTP/welcome events to Redis pub/sub
+ * - UserProfileCacheService — Redis cache for user profile data
  *
  * KEY DESIGN DECISIONS:
  *
- *   Token Blacklist:
- *     On logout, the access token is stored in Redis with a 24-hour TTL
- *     under the key "token:blacklist:{token}". The validateToken() endpoint
- *     checks this blacklist before confirming a token is valid. This means
- *     even a non-expired token becomes invalid immediately after logout.
+ * Token Blacklist:
+ * On logout, the access token is stored in Redis with a 24-hour TTL
+ * under the key "token:blacklist:{token}". The validateToken() endpoint
+ * checks this blacklist before confirming a token is valid. This means
+ * even a non-expired token becomes invalid immediately after logout.
  *
- *   Forgot Password — Security Non-Disclosure:
- *     forgotPassword() always returns a generic "if an account exists…" message
- *     even when the email isn't registered. This prevents email enumeration
- *     (an attacker testing "did this email register here?" by observing the response).
+ * Forgot Password — Security Non-Disclosure:
+ * forgotPassword() always returns a generic "if an account exists…" message
+ * even when the email isn't registered. This prevents email enumeration
+ * (an attacker testing "did this email register here?" by observing the
+ * response).
  *
- *   Password Reset Invalidation:
- *     After resetPassword(), a Redis key "user:invalidated:{userId}" is set.
- *     This allows the API gateway or other services to detect that old tokens
- *     issued before the password change should no longer be trusted.
+ * Password Reset Invalidation:
+ * After resetPassword(), a Redis key "user:invalidated:{userId}" is set.
+ * This allows the API gateway or other services to detect that old tokens
+ * issued before the password change should no longer be trusted.
  *
- *   Guest Login:
- *     Creates a real user account in the database with role=GUEST, using a
- *     random UUID-based username and a private email domain (@guest.connecthub.local).
- *     The password is a random UUID hash so no one can log in as a guest via password.
- *     Guest accounts are not cleaned up automatically — a scheduled job could prune them.
+ * Guest Login:
+ * Creates a real user account in the database with role=GUEST, using a
+ * random UUID-based username and a private email domain
+ * (@guest.connecthub.local).
+ * The password is a random UUID hash so no one can log in as a guest via
+ * password.
+ * Guest accounts are not cleaned up automatically — a scheduled job could prune
+ * them.
  *
- *   OAuth2:
- *     The oAuth2Callback() method throws an error because OAuth2 login is handled
- *     entirely by Spring Security (see SecurityConfig + OAuth2SuccessHandler).
- *     This method exists only to satisfy the AuthService interface definition.
- *
- *   E2E Test Bypass:
- *     verifyRegistrationOtp() has a special case: if the email ends with "@test.com"
- *     and the OTP is "000000", verification succeeds without checking Redis.
- *     This allows automated end-to-end tests to run without needing real email delivery.
+ * OAuth2:
+ * The oAuth2Callback() method throws an error because OAuth2 login is handled
+ * entirely by Spring Security (see SecurityConfig + OAuth2SuccessHandler).
+ * This method exists only to satisfy the AuthService interface definition.
  */
 @SuppressWarnings("null")
 @Service
@@ -90,7 +90,9 @@ public class AuthServiceImpl implements AuthService {
     private final UserProfileCacheService profileCache;
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
-    /** Redis key prefix for the token blacklist — stores invalidated access tokens */
+    /**
+     * Redis key prefix for the token blacklist — stores invalidated access tokens
+     */
     private static final String TOKEN_BLACKLIST = "token:blacklist:";
 
     // =========================================================================
@@ -98,7 +100,8 @@ public class AuthServiceImpl implements AuthService {
     // =========================================================================
 
     /**
-     * register — creates a new unverified user account and sends a registration OTP.
+     * register — creates a new unverified user account and sends a registration
+     * OTP.
      * Validates that neither the email nor username is already taken before saving.
      * The user is saved with emailVerified=false so they cannot log in until they
      * verify their email by entering the OTP sent to their inbox.
@@ -109,6 +112,8 @@ public class AuthServiceImpl implements AuthService {
             throw new DuplicateResourceException("Email already registered");
         if (userRepository.existsByUsername(req.getUsername()))
             throw new DuplicateResourceException("Username already taken");
+        if (userRepository.existsByPhoneNumber(req.getPhoneNumber()))
+            throw new DuplicateResourceException("Phone number already registered");
 
         User user = User.builder()
                 .username(req.getUsername()).email(req.getEmail())
@@ -129,13 +134,10 @@ public class AuthServiceImpl implements AuthService {
      * verifyRegistrationOtp — verifies the email OTP sent after registration.
      * On success, marks the user's email as verified and returns full JWT tokens
      * so the user is immediately logged in without a separate login step.
-     * The E2E test bypass (email ends "@test.com" + OTP "000000") allows automated
-     * tests to verify accounts without real email delivery.
      */
     @Override
     public AuthResponse verifyRegistrationOtp(OtpVerifyRequest req) {
-        boolean isE2eTestUser = req.getEmail() != null && req.getEmail().endsWith("@test.com") && "000000".equals(req.getOtp());
-        if (!isE2eTestUser && !otpService.verify("register", req.getEmail(), req.getOtp()))
+        if (!otpService.verify("register", req.getEmail(), req.getOtp()))
             throw new BadRequestException("Invalid or expired OTP. Max 5 attempts allowed.");
 
         User user = userRepository.findByEmail(req.getEmail())
@@ -151,7 +153,8 @@ public class AuthServiceImpl implements AuthService {
      * resendRegistrationOtp — re-sends the registration verification OTP.
      * Checks the cooldown before issuing a new OTP — if the cooldown has not
      * expired yet, returns the remaining wait time instead of sending again.
-     * Prevents a user who already verified from requesting OTPs (throws if already verified).
+     * Prevents a user who already verified from requesting OTPs (throws if already
+     * verified).
      */
     @Override
     public ApiResponse<Void> resendRegistrationOtp(String email) {
@@ -163,7 +166,8 @@ public class AuthServiceImpl implements AuthService {
         }
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        if (user.isEmailVerified()) throw new BadRequestException("Email already verified");
+        if (user.isEmailVerified())
+            throw new BadRequestException("Email already verified");
 
         String otp = otpService.generateAndStore("register", email, 5);
         otpService.setCooldown("register", email, 60);
@@ -237,9 +241,11 @@ public class AuthServiceImpl implements AuthService {
         if (user == null && req.getUsername() != null && !req.getUsername().isBlank()) {
             user = userRepository.findByUsername(req.getUsername()).orElse(null);
         }
-        if (user == null) throw new UnauthorizedException("Invalid credentials");
+        if (user == null)
+            throw new UnauthorizedException("Invalid credentials");
 
-        if (!user.isActive()) throw new UnauthorizedException("Account is suspended");
+        if (!user.isActive())
+            throw new UnauthorizedException("Account is suspended");
         if (!"LOCAL".equals(user.getProvider()))
             throw new UnauthorizedException("Please use " + user.getProvider() + " to sign in");
         if (!user.isEmailVerified())
@@ -259,8 +265,10 @@ public class AuthServiceImpl implements AuthService {
     /**
      * loginAsGuest — creates a temporary guest account and returns JWT tokens.
      * The guest has role=GUEST so the gateway can apply stricter rate limits.
-     * A random UUID fragment is used for the username and email to ensure uniqueness.
-     * The password is a random UUID hash — no one can log in as this guest via password.
+     * A random UUID fragment is used for the username and email to ensure
+     * uniqueness.
+     * The password is a random UUID hash — no one can log in as this guest via
+     * password.
      */
     @Override
     public AuthResponse loginAsGuest() {
@@ -295,7 +303,8 @@ public class AuthServiceImpl implements AuthService {
         String email = request.getEmail();
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("No account found with this email"));
-        if (!user.isActive()) throw new UnauthorizedException("Account is suspended");
+        if (!user.isActive())
+            throw new UnauthorizedException("Account is suspended");
         if (!user.isEmailVerified())
             throw new UnauthorizedException("Email not verified. Please verify your email first.");
 
@@ -322,7 +331,8 @@ public class AuthServiceImpl implements AuthService {
 
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        if (!user.isActive()) throw new UnauthorizedException("Account is suspended");
+        if (!user.isActive())
+            throw new UnauthorizedException("Account is suspended");
 
         log.info("User logged in (email OTP): {}", user.getUsername());
         return buildAuthResponse(user);
@@ -333,7 +343,8 @@ public class AuthServiceImpl implements AuthService {
     // =========================================================================
 
     /**
-     * requestPhoneLoginOtp — sends a login OTP via SMS to a registered phone number.
+     * requestPhoneLoginOtp — sends a login OTP via SMS to a registered phone
+     * number.
      * The phone number must be associated with an existing active account.
      */
     @Override
@@ -341,8 +352,10 @@ public class AuthServiceImpl implements AuthService {
         String phone = request.getPhoneNumber();
         User user = userRepository.findByPhoneNumber(phone)
                 .orElseThrow(() -> new ResourceNotFoundException("No account found with this phone number"));
-        if (!user.isActive()) throw new UnauthorizedException("Account is suspended");
-        if (!user.isPhoneVerified()) throw new UnauthorizedException("Phone number not verified. Please verify your phone first.");
+        if (!user.isActive())
+            throw new UnauthorizedException("Account is suspended");
+        if (!user.isPhoneVerified())
+            throw new UnauthorizedException("Phone number not verified. Please verify your phone first.");
 
         if (otpService.isOnCooldown("phonelogin", phone)) {
             long remaining = otpService.getCooldownRemaining("phonelogin", phone);
@@ -367,7 +380,8 @@ public class AuthServiceImpl implements AuthService {
 
         User user = userRepository.findByPhoneNumber(request.getPhoneNumber())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        if (!user.isActive()) throw new UnauthorizedException("Account is suspended");
+        if (!user.isActive())
+            throw new UnauthorizedException("Account is suspended");
 
         log.info("User logged in (phone OTP): {}", user.getUsername());
         return buildAuthResponse(user);
@@ -379,36 +393,45 @@ public class AuthServiceImpl implements AuthService {
 
     /**
      * logout — blacklists the access token in Redis so it cannot be used again.
-     * The token is stored with a 24-hour TTL (matching the max access token lifetime)
+     * The token is stored with a 24-hour TTL (matching the max access token
+     * lifetime)
      * so the key automatically expires and never accumulates indefinitely.
-     * The "Bearer " prefix is stripped if present since we store only the raw token.
+     * The "Bearer " prefix is stripped if present since we store only the raw
+     * token.
      */
     @Override
     public void logout(String token) {
-        if (token != null && token.startsWith("Bearer ")) token = token.substring(7);
+        if (token != null && token.startsWith("Bearer "))
+            token = token.substring(7);
         redis.opsForValue().set(TOKEN_BLACKLIST + token, "1", 24, TimeUnit.HOURS);
     }
 
     /**
      * validateToken — checks whether a token is valid and not blacklisted.
-     * Used by the /auth/validate endpoint which the gateway can call to verify tokens
-     * without needing the JWT secret (though the gateway currently validates locally).
+     * Used by the /auth/validate endpoint which the gateway can call to verify
+     * tokens
+     * without needing the JWT secret (though the gateway currently validates
+     * locally).
      */
     @Override
     public boolean validateToken(String token) {
-        if (Boolean.TRUE.equals(redis.hasKey(TOKEN_BLACKLIST + token))) return false;
+        if (Boolean.TRUE.equals(redis.hasKey(TOKEN_BLACKLIST + token)))
+            return false;
         return jwtUtil.isValid(token);
     }
 
     /**
-     * refreshToken — issues a new access token in exchange for a valid refresh token.
+     * refreshToken — issues a new access token in exchange for a valid refresh
+     * token.
      * The refresh token is validated (signature + expiry) by jwtUtil.isValid().
-     * A fresh access token is generated from the current database state of the user,
+     * A fresh access token is generated from the current database state of the
+     * user,
      * so any role or subscription tier changes are reflected in the new token.
      */
     @Override
     public AuthResponse refreshToken(String refreshToken) {
-        if (!jwtUtil.isValid(refreshToken)) throw new UnauthorizedException("Invalid refresh token");
+        if (!jwtUtil.isValid(refreshToken))
+            throw new UnauthorizedException("Invalid refresh token");
         User user = getUserById(jwtUtil.getUserId(refreshToken));
         return buildAuthResponse(user);
     }
@@ -427,7 +450,8 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public ApiResponse<Void> forgotPassword(ForgotPasswordRequest req) {
         userRepository.findByEmail(req.getEmail()).ifPresent(user -> {
-            if (!"LOCAL".equals(user.getProvider())) return;
+            if (!"LOCAL".equals(user.getProvider()))
+                return;
             if (!otpService.isOnCooldown("reset", req.getEmail())) {
                 String otp = otpService.generateAndStore("reset", req.getEmail(), 10);
                 otpService.setCooldown("reset", req.getEmail(), 60);
@@ -440,7 +464,8 @@ public class AuthServiceImpl implements AuthService {
     /**
      * verifyResetOtp — verifies the password reset OTP and returns a short-lived
      * resetToken if the OTP is correct. The resetToken is a JWT with "purpose":
-     * "PASSWORD_RESET" that must be passed to resetPassword() to authorize the change.
+     * "PASSWORD_RESET" that must be passed to resetPassword() to authorize the
+     * change.
      * Using a JWT avoids needing to store server-side state for reset sessions.
      */
     @Override
@@ -454,14 +479,17 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-     * resetPassword — sets a new password using the reset token from verifyResetOtp().
+     * resetPassword — sets a new password using the reset token from
+     * verifyResetOtp().
      * Validates the token's signature, expiry, and "purpose" claim before applying
      * the change. After resetting, invalidates all existing sessions by writing a
-     * "user:invalidated:{userId}" key to Redis, signaling that old tokens are stale.
+     * "user:invalidated:{userId}" key to Redis, signaling that old tokens are
+     * stale.
      */
     @Override
     public ApiResponse<Void> resetPassword(ResetPasswordRequest req) {
-        if (!jwtUtil.isValid(req.getResetToken())) throw new UnauthorizedException("Invalid or expired reset token");
+        if (!jwtUtil.isValid(req.getResetToken()))
+            throw new UnauthorizedException("Invalid or expired reset token");
         var claims = jwtUtil.parseToken(req.getResetToken());
         if (!"PASSWORD_RESET".equals(claims.get("purpose")))
             throw new UnauthorizedException("Invalid token purpose");
@@ -476,7 +504,8 @@ public class AuthServiceImpl implements AuthService {
          * still valid post password-reset?" can check this key. The 7-day TTL
          * ensures it covers the lifetime of any refresh tokens that might exist.
          */
-        redis.opsForValue().set("user:invalidated:" + userId, String.valueOf(System.currentTimeMillis()), 7, TimeUnit.DAYS);
+        redis.opsForValue().set("user:invalidated:" + userId, String.valueOf(System.currentTimeMillis()), 7,
+                TimeUnit.DAYS);
         log.info("Password reset completed for user: {}", user.getUsername());
         return ApiResponse.ok("Password reset successful. Please login with your new password.");
     }
@@ -486,7 +515,8 @@ public class AuthServiceImpl implements AuthService {
     // =========================================================================
 
     /**
-     * oAuth2Callback — not used. OAuth2 login is handled entirely by Spring Security
+     * oAuth2Callback — not used. OAuth2 login is handled entirely by Spring
+     * Security
      * (configured in SecurityConfig with OAuth2AuthenticationSuccessHandler).
      * This method exists only to satisfy the AuthService interface.
      */
@@ -525,21 +555,29 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-     * updateProfile — updates editable profile fields and invalidates the Redis cache.
+     * updateProfile — updates editable profile fields and invalidates the Redis
+     * cache.
      * Username uniqueness is re-checked only if it actually changed.
      */
     @Override
     public UserProfileDto updateProfile(int userId, UpdateProfileRequest req) {
         User user = getUserById(userId);
-        if (req.getFullName() != null) user.setFullName(req.getFullName());
+        if (req.getFullName() != null)
+            user.setFullName(req.getFullName());
         if (req.getUsername() != null && !user.getUsername().equals(req.getUsername())) {
             if (userRepository.existsByUsername(req.getUsername()))
                 throw new DuplicateResourceException("Username already taken");
             user.setUsername(req.getUsername());
         }
-        if (req.getAvatarUrl() != null) user.setAvatarUrl(req.getAvatarUrl());
-        if (req.getBio() != null) user.setBio(req.getBio());
-        if (req.getPhoneNumber() != null) user.setPhoneNumber(req.getPhoneNumber());
+        if (req.getAvatarUrl() != null)
+            user.setAvatarUrl(req.getAvatarUrl());
+        if (req.getBio() != null)
+            user.setBio(req.getBio());
+        if (req.getPhoneNumber() != null && !req.getPhoneNumber().equals(user.getPhoneNumber())) {
+            if (userRepository.existsByPhoneNumber(req.getPhoneNumber()))
+                throw new DuplicateResourceException("Phone number already registered");
+            user.setPhoneNumber(req.getPhoneNumber());
+        }
         UserProfileDto updated = toProfileDto(userRepository.save(user));
         profileCache.evict(userId);
         return updated;
@@ -547,12 +585,14 @@ public class AuthServiceImpl implements AuthService {
 
     /**
      * changePassword — changes a user's password after verifying the current one.
-     * OAuth users cannot change passwords because ConnectHub doesn't manage their credentials.
+     * OAuth users cannot change passwords because ConnectHub doesn't manage their
+     * credentials.
      */
     @Override
     public void changePassword(int userId, ChangePasswordRequest req) {
         User user = getUserById(userId);
-        if (!"LOCAL".equals(user.getProvider())) throw new BadRequestException("OAuth users cannot change password");
+        if (!"LOCAL".equals(user.getProvider()))
+            throw new BadRequestException("OAuth users cannot change password");
         if (!passwordEncoder.matches(req.getCurrentPassword(), user.getPasswordHash()))
             throw new UnauthorizedException("Current password is incorrect");
         user.setPasswordHash(passwordEncoder.encode(req.getNewPassword()));
@@ -611,10 +651,52 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    public User changeRole(int userId, String role) {
+        User u = getUserById(userId);
+        String normalized = role.toUpperCase();
+        u.setRole(normalized);
+        if ("ADMIN".equals(normalized) || "PLATFORM_ADMIN".equals(normalized)) {
+            u.setSubscriptionTier("PRO");
+        } else if ("USER".equals(normalized) || "GUEST".equals(normalized)) {
+            u.setSubscriptionTier("FREE");
+        }
+        User saved = userRepository.save(u);
+        profileCache.evict(userId);
+        return saved;
+    }
+
+    @Override
     public void deleteUser(int userId) {
         userRepository.deleteById(userId);
         log.info("Publishing USER_DELETED event for userId: {}", userId);
         kafkaTemplate.send("auth.user.deleted", String.valueOf(userId));
+    }
+
+    /**
+     * P2-15: selfDeleteAccount — user-initiated account deletion.
+     * LOCAL provider accounts must confirm their password to prevent accidental
+     * or CSRF-driven deletions. OAuth accounts (Google, GitHub) skip the password
+     * check since the user may not have a local password set.
+     */
+    @Override
+    public void selfDeleteAccount(int userId, String password) {
+        User user = getUserById(userId);
+        // LOCAL accounts must verify password
+        if ("LOCAL".equals(user.getProvider())) {
+            if (password == null || password.isBlank()) {
+                throw new RuntimeException("Password confirmation is required to delete your account");
+            }
+            if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+                throw new RuntimeException("Incorrect password");
+            }
+        }
+        // Invalidate all sessions
+        redis.opsForValue().set("user:invalidated:" + userId, String.valueOf(System.currentTimeMillis()),
+                jwtUtil.getAccessExpiry() / 1000, java.util.concurrent.TimeUnit.SECONDS);
+        // Delete user and publish cleanup event
+        deleteUser(userId);
+        profileCache.evict(userId);
+        log.info("User {} self-deleted their account", userId);
     }
 
     @Override
@@ -652,11 +734,42 @@ public class AuthServiceImpl implements AuthService {
     /**
      * buildAuthResponse — constructs the standard login response containing
      * both tokens, token metadata (type, expiry in seconds), and a slim user DTO.
-     * Called by every successful login/verify method to ensure a consistent response.
+     * Called by every successful login/verify method to ensure a consistent
+     * response.
      */
     private AuthResponse buildAuthResponse(User user) {
+        /*
+         * Delete the sub:tier override key in Redis so the fresh JWT claim is
+         * authoritative.
+         * KafkaSubscriptionListener writes this key when the user's subscription
+         * changes
+         * mid-session; once they log in or refresh, the new JWT already carries the
+         * correct tier, so the override is no longer needed.
+         */
+        redis.delete("sub:tier:" + user.getUserId());
+
+        String accessToken = jwtUtil.generateAccessToken(user);
+
+        /*
+         * P2-9: Register this session in Redis so it appears in the session list.
+         * Extract the jti from the freshly generated token and store a tracking key.
+         * TTL matches the access token expiry so the key auto-cleans.
+         */
+        try {
+            String jti = jwtUtil.extractClaim(accessToken, c -> c.get("jti", String.class));
+            if (jti != null) {
+                long ttlSeconds = jwtUtil.getAccessExpiry() / 1000;
+                String metadata = "{\"loginAt\":\"" + java.time.Instant.now() + "\",\"userId\":" + user.getUserId()
+                        + "}";
+                redis.opsForValue().set("session:" + user.getUserId() + ":" + jti, metadata,
+                        ttlSeconds, java.util.concurrent.TimeUnit.SECONDS);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to register session in Redis: {}", e.getMessage());
+        }
+
         return AuthResponse.builder()
-                .accessToken(jwtUtil.generateAccessToken(user))
+                .accessToken(accessToken)
                 .refreshToken(jwtUtil.generateRefreshToken(user))
                 .tokenType("Bearer")
                 .expiresIn(jwtUtil.getAccessExpiry() / 1000)
@@ -666,6 +779,7 @@ public class AuthServiceImpl implements AuthService {
                         .phoneNumber(user.getPhoneNumber())
                         .status(user.getStatus()).role(user.getRole())
                         .subscriptionTier(user.getSubscriptionTier() != null ? user.getSubscriptionTier() : "FREE")
+                        .active(user.isActive())
                         .build())
                 .build();
     }

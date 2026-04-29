@@ -12,17 +12,37 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, Integer> {
     Optional<User> findByEmail(String email);
+
     Optional<User> findByUsername(String username);
+
     Optional<User> findByPhoneNumber(String phoneNumber);
+
     Optional<User> findByProviderAndProviderId(String provider, String providerId);
+
     boolean existsByEmail(String email);
+
     boolean existsByUsername(String username);
+
+    boolean existsByPhoneNumber(String phoneNumber);
+
     List<User> findByUserIdIn(List<Integer> ids);
 
-    @Query("SELECT u FROM User u WHERE LOWER(u.username) LIKE LOWER(CONCAT('%',:q,'%')) OR LOWER(u.fullName) LIKE LOWER(CONCAT('%',:q,'%'))")
+    @Query("""
+            SELECT u FROM User u
+            WHERE LOWER(u.username) LIKE LOWER(CONCAT('%', :q, '%'))
+               OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :q, '%'))
+               OR LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%'))
+               OR LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :q, '%'))
+            """)
     List<User> searchUsers(@Param("q") String query);
 
     void deleteByEmailVerifiedFalseAndCreatedAtBefore(LocalDateTime threshold);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM User u WHERE u.username LIKE 'guest\\_%' AND u.createdAt < :threshold")
+    int deleteGuestAccountsOlderThan(@Param("threshold") LocalDateTime threshold);
+
     long countByActiveTrue();
+
     long countByActiveFalse();
 }
