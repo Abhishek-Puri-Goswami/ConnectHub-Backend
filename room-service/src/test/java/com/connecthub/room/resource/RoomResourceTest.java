@@ -127,7 +127,8 @@ class RoomResourceTest {
 
     @Test
     void updateTimestamp() {
-        assertEquals(HttpStatus.NO_CONTENT, res.updateTimestamp("1").getStatusCode());
-        verify(svc).updateLastMessageAt("1");
+        java.util.Map<String, Object> body = java.util.Map.of("preview", "hello", "senderId", 1);
+        assertEquals(HttpStatus.NO_CONTENT, res.updateTimestamp("1", body).getStatusCode());
+        verify(svc).updateLastMessageAt(eq("1"), any(), any());
     }
 }
