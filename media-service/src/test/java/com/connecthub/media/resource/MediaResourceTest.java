@@ -1,7 +1,9 @@
 package com.connecthub.media.resource;
 
+import com.connecthub.media.client.RoomServiceClient;
 import com.connecthub.media.entity.MediaFile;
 import com.connecthub.media.service.MediaService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -23,7 +25,13 @@ import static org.mockito.Mockito.*;
 class MediaResourceTest {
 
     @Mock private MediaService svc;
+    @Mock private RoomServiceClient roomServiceClient;
     @InjectMocks private MediaResource resource;
+
+    @BeforeEach
+    void setUp() {
+        when(roomServiceClient.isMember(anyString(), anyInt())).thenReturn(true);
+    }
 
     @Test
     void upload_returns201WithBody() throws IOException {
@@ -53,7 +61,7 @@ class MediaResourceTest {
         MediaFile mf = MediaFile.builder().mediaId("id1").build();
         when(svc.getById("id1")).thenReturn(Optional.of(mf));
 
-        ResponseEntity<MediaFile> resp = resource.get("id1");
+        ResponseEntity<MediaFile> resp = resource.get("id1", 1);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resp.getBody()).isEqualTo(mf);
@@ -63,7 +71,7 @@ class MediaResourceTest {
     void get_notFound_returns404() {
         when(svc.getById("ghost")).thenReturn(Optional.empty());
 
-        ResponseEntity<MediaFile> resp = resource.get("ghost");
+        ResponseEntity<MediaFile> resp = resource.get("ghost", 1);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
@@ -73,7 +81,7 @@ class MediaResourceTest {
         List<MediaFile> files = List.of(MediaFile.builder().mediaId("a").build());
         when(svc.getByRoom("room1")).thenReturn(files);
 
-        ResponseEntity<List<MediaFile>> resp = resource.byRoom("room1");
+        ResponseEntity<List<MediaFile>> resp = resource.byRoom("room1", 1);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resp.getBody()).isEqualTo(files);
@@ -81,9 +89,11 @@ class MediaResourceTest {
 
     @Test
     void del_returns204() {
+        MediaFile mf = MediaFile.builder().mediaId("id1").uploaderId(1).build();
+        when(svc.getById("id1")).thenReturn(Optional.of(mf));
         doNothing().when(svc).delete("id1");
 
-        ResponseEntity<Void> resp = resource.del("id1");
+        ResponseEntity<Void> resp = resource.del("id1", 1);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         verify(svc).delete("id1");
@@ -93,7 +103,7 @@ class MediaResourceTest {
     void count_returns200WithCount() {
         when(svc.count("room1")).thenReturn(5);
 
-        ResponseEntity<Integer> resp = resource.count("room1");
+        ResponseEntity<Integer> resp = resource.count("room1", 1);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resp.getBody()).isEqualTo(5);

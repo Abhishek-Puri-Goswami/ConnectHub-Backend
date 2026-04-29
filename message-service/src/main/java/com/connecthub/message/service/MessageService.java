@@ -1,6 +1,8 @@
 package com.connecthub.message.service;
 import com.connecthub.message.config.SubscriptionTierLimits;
+import com.connecthub.message.dto.MessagePreviewDto;
 import com.connecthub.message.entity.*;
+import com.connecthub.message.exception.BadRequestException;
 import com.connecthub.message.exception.TooManyRequestsException;
 import com.connecthub.message.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.HtmlUtils;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * MessageService — Core Business Logic for Chat Messages
@@ -85,12 +89,10 @@ public class MessageService {
                         SubscriptionTierLimits.messagesPerMinute(tier));
             }
         }
-        /*
-         * XSS sanitization: only escape if the content hasn't been escaped already.
-         * Messages arriving from websocket-service are pre-escaped; direct REST calls are not.
-         * Escaping twice would corrupt entities like &amp; into &amp;amp; in the database,
-         * making the stored copy different from what was broadcast live.
-         */
+        if (msg.getReplyToMessageId() != null && !msg.getReplyToMessageId().isBlank()) {
+            msgRepo.findByMessageIdAndRoomId(msg.getReplyToMessageId(), msg.getRoomId())
+                    .orElseThrow(() -> new BadRequestException("Reply target not found in this room"));
+        }
         if (msg.getContent() != null && !isAlreadyEscaped(msg.getContent())) {
             msg.setContent(HtmlUtils.htmlEscape(msg.getContent()));
         }
@@ -139,18 +141,47 @@ public class MessageService {
     /**
      * getMessages — loads a page of messages for a room in reverse-chronological order.
      *
-     * HOW IT WORKS:
-     *   If a "before" cursor timestamp is provided, only messages sent before that time
-     *   are returned. This enables infinite-scroll pagination: the frontend passes the
-     *   sentAt of the oldest visible message as the cursor to load the previous page.
-     *   If no cursor is given, the most recent messages are returned.
-     *   Deleted messages (isDeleted=true) are always filtered out.
+     * Deleted messages are included in the result so the frontend can render a
+     * "This message was deleted" placeholder preserving thread continuity.
+     * Content and media fields are cleared before returning to avoid leaking data.
      */
     @Transactional(readOnly = true)
     public List<Message> getMessages(String roomId, LocalDateTime before, int limit) {
         var pageable = PageRequest.of(0, limit);
-        if (before != null) return msgRepo.findByRoomIdAndIsDeletedFalseAndSentAtBeforeOrderBySentAtDesc(roomId, before, pageable);
-        return msgRepo.findByRoomIdAndIsDeletedFalseOrderBySentAtDesc(roomId, pageable);
+        List<Message> messages = (before != null)
+                ? msgRepo.findByRoomIdAndSentAtBeforeOrderBySentAtDesc(roomId, before, pageable)
+                : msgRepo.findByRoomIdOrderBySentAtDesc(roomId, pageable);
+        // Redact content for deleted messages — frontend renders placeholder
+        messages.forEach(m -> {
+            if (m.isDeleted()) {
+                m.setContent(null);
+                m.setMediaUrl(null);
+                m.setThumbnailUrl(null);
+            }
+        });
+        enrichReplies(messages);
+        return messages;
+    }
+
+    private void enrichReplies(List<Message> messages) {
+        List<String> replyIds = messages.stream()
+                .map(Message::getReplyToMessageId)
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+        if (replyIds.isEmpty()) return;
+        Map<String, Message> replyMap = msgRepo.findAllById(replyIds).stream()
+                .collect(Collectors.toMap(Message::getMessageId, m -> m));
+        messages.forEach(m -> {
+            String rid = m.getReplyToMessageId();
+            if (rid != null && replyMap.containsKey(rid)) {
+                Message parent = replyMap.get(rid);
+                // Redact deleted parent content — same rule as getMessages()
+                String raw = parent.isDeleted() ? null : parent.getContent();
+                String preview = (raw != null && raw.length() > 100) ? raw.substring(0, 100) + "…" : raw;
+                m.setReplyTo(new MessagePreviewDto(parent.getMessageId(), parent.getSenderId(), preview, parent.getSentAt()));
+            }
+        });
     }
 
     /**
