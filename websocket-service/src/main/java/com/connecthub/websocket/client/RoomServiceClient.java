@@ -1,8 +1,8 @@
 package com.connecthub.websocket.client;
 
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -22,8 +22,14 @@ public interface RoomServiceClient {
     List<RoomMemberDto> getRoomMembers(@PathVariable("roomId") String roomId, @RequestHeader("X-User-Id") String userId);
 
     @PutMapping("/api/v1/rooms/{roomId}/timestamp")
-    void updateLastMessageAt(@PathVariable("roomId") String roomId, @RequestHeader("X-User-Id") String userId);
+    void updateLastMessageAt(@PathVariable("roomId") String roomId, @RequestBody Map<String, Object> body, @RequestHeader("X-User-Id") String userId);
 
     @PutMapping("/api/v1/rooms/{roomId}/read/{uid}")
     void updateLastRead(@PathVariable("roomId") String roomId, @PathVariable("uid") String uid, @RequestHeader("X-User-Id") String userId);
+
+    @PutMapping("/api/v1/rooms/{roomId}/pin/{messageId}")
+    void pinMessage(@PathVariable("roomId") String roomId, @PathVariable("messageId") String messageId, @RequestHeader("X-User-Id") String userId);
+
+    @DeleteMapping("/api/v1/rooms/{roomId}/pin")
+    void unpinMessage(@PathVariable("roomId") String roomId, @RequestHeader("X-User-Id") String userId);
 }

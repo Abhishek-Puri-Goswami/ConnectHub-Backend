@@ -1,18 +1,24 @@
 package com.connecthub.auth.resource;
 
+import com.connecthub.auth.config.IpRateLimiter;
 import com.connecthub.auth.dto.*;
 import com.connecthub.auth.entity.User;
 import com.connecthub.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 
 @RestController
@@ -22,6 +28,8 @@ import java.util.Map;
 public class AuthResource {
 
     private final AuthService authService;
+    private final IpRateLimiter ipRateLimiter;
+    private final StringRedisTemplate redis;
 
     // ─── Registration ─────────────────────────────────────────────────
 
@@ -47,7 +55,12 @@ public class AuthResource {
 
     @PostMapping("/phone/request-otp")
     @Operation(summary = "Request phone OTP", description = "Sends OTP via SMS for phone verification during registration")
-    public ResponseEntity<ApiResponse<Void>> requestPhoneOtp(@Valid @RequestBody PhoneOtpRequest request) {
+    public ResponseEntity<ApiResponse<Void>> requestPhoneOtp(@Valid @RequestBody PhoneOtpRequest request, HttpServletRequest httpReq) {
+        if (!ipRateLimiter.tryAcquireOtp(httpReq)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .header(HttpHeaders.RETRY_AFTER, String.valueOf(ipRateLimiter.getRemainingSeconds("otp", httpReq)))
+                    .body(ApiResponse.<Void>builder().success(false).message("Too many OTP requests. Please try again later.").build());
+        }
         return ResponseEntity.ok(authService.requestPhoneOtp(request));
     }
 
@@ -75,7 +88,12 @@ public class AuthResource {
 
     @PostMapping("/login/email/request-otp")
     @Operation(summary = "Request email login OTP", description = "Sends OTP to email for passwordless login")
-    public ResponseEntity<ApiResponse<Void>> requestEmailLoginOtp(@Valid @RequestBody EmailLoginOtpRequest request) {
+    public ResponseEntity<ApiResponse<Void>> requestEmailLoginOtp(@Valid @RequestBody EmailLoginOtpRequest request, HttpServletRequest httpReq) {
+        if (!ipRateLimiter.tryAcquireOtp(httpReq)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .header(HttpHeaders.RETRY_AFTER, String.valueOf(ipRateLimiter.getRemainingSeconds("otp", httpReq)))
+                    .body(ApiResponse.<Void>builder().success(false).message("Too many OTP requests. Please try again later.").build());
+        }
         return ResponseEntity.ok(authService.requestEmailLoginOtp(request));
     }
 
@@ -89,7 +107,12 @@ public class AuthResource {
 
     @PostMapping("/login/phone/request-otp")
     @Operation(summary = "Request phone login OTP", description = "Sends OTP via SMS for phone login")
-    public ResponseEntity<ApiResponse<Void>> requestPhoneLoginOtp(@Valid @RequestBody PhoneOtpRequest request) {
+    public ResponseEntity<ApiResponse<Void>> requestPhoneLoginOtp(@Valid @RequestBody PhoneOtpRequest request, HttpServletRequest httpReq) {
+        if (!ipRateLimiter.tryAcquireOtp(httpReq)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .header(HttpHeaders.RETRY_AFTER, String.valueOf(ipRateLimiter.getRemainingSeconds("otp", httpReq)))
+                    .body(ApiResponse.<Void>builder().success(false).message("Too many OTP requests. Please try again later.").build());
+        }
         return ResponseEntity.ok(authService.requestPhoneLoginOtp(request));
     }
 
@@ -120,7 +143,12 @@ public class AuthResource {
     // ─── Password recovery ───────────────────────────────────────────
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request, HttpServletRequest httpReq) {
+        if (!ipRateLimiter.tryAcquireForgotPassword(httpReq)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .header(HttpHeaders.RETRY_AFTER, String.valueOf(ipRateLimiter.getRemainingSeconds("forgotpw", httpReq)))
+                    .body(ApiResponse.<Void>builder().success(false).message("Too many password reset requests. Please try again later.").build());
+        }
         return ResponseEntity.ok(authService.forgotPassword(request));
     }
 
@@ -145,7 +173,21 @@ public class AuthResource {
     // ─── User management ─────────────────────────────────────────────
 
     @GetMapping("/profile/{userId}")
-    public ResponseEntity<UserProfileDto> getProfile(@PathVariable int userId) {
+    public ResponseEntity<UserProfileDto> getProfile(
+            @PathVariable int userId,
+            @RequestHeader(value = "X-User-Id", required = false) String requesterId) {
+        // P1-7: Rate-limit profile lookups to prevent user enumeration
+        if (requesterId != null && !requesterId.isBlank()) {
+            long epochMinute = Instant.now().getEpochSecond() / 60;
+            String key = "ratelimit:profile:" + requesterId + ":" + epochMinute;
+            Long count = redis.opsForValue().increment(key);
+            if (count != null && count == 1) {
+                redis.expire(key, 2, TimeUnit.MINUTES);
+            }
+            if (count != null && count > 60) {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).build();
+            }
+        }
         return ResponseEntity.ok(authService.getPublicProfile(userId));
     }
 
@@ -179,5 +221,18 @@ public class AuthResource {
     @PostMapping("/users/batch")
     public ResponseEntity<List<UserProfileDto>> getUsersByIds(@RequestBody List<Integer> ids) {
         return ResponseEntity.ok(authService.getUsersByIds(ids));
+    }
+
+    // ─── P2-15: Self-Service Account Deletion ────────────────────────
+
+    @DeleteMapping("/me")
+    @Operation(summary = "Delete own account", description = "Self-service account deletion. Requires password for LOCAL accounts.")
+    public ResponseEntity<ApiResponse<Void>> deleteOwnAccount(
+            @RequestHeader("X-User-Id") int userId,
+            @RequestBody(required = false) Map<String, String> body) {
+        String password = body != null ? body.get("password") : null;
+        authService.selfDeleteAccount(userId, password);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .success(true).message("Account deleted successfully").build());
     }
 }

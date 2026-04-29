@@ -105,8 +105,13 @@ class DeliveryServiceTest {
 
     @Test
     void updateRoomTimestamp() {
-        deliveryService.updateRoomTimestamp("r1", "1");
-        verify(roomServiceClient).updateLastMessageAt("r1", "1");
+        ChatMessagePayload msg = new ChatMessagePayload();
+        msg.setRoomId("r1");
+        msg.setSenderId(1);
+        msg.setContent("hello");
+        msg.setType("TEXT");
+        deliveryService.updateRoomTimestamp(msg);
+        verify(roomServiceClient).updateLastMessageAt(eq("r1"), any(), eq("1"));
     }
 
     @Test

@@ -14,6 +14,7 @@ COPY notification-service/pom.xml notification-service/pom.xml
 COPY websocket-service/pom.xml websocket-service/pom.xml
 COPY payment-service/pom.xml payment-service/pom.xml
 COPY admin-server/pom.xml admin-server/pom.xml
+COPY code-coverage-report/pom.xml code-coverage-report/pom.xml
 
 RUN mvn -pl payment-service -am dependency:go-offline -q
 

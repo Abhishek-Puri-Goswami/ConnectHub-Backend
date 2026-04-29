@@ -5,20 +5,20 @@ spring:
     name: service-registry
   security:
     user:
-      name: eureka
-      password: eureka
+      name: ${EUREKA_USER:eureka}
+      password: ${EUREKA_PASSWORD:eureka}
   boot:
     admin:
       client:
         url: http://${ADMIN_SERVER_HOST:localhost}:9090
-        username: ${ADMIN_USER:your_admin_user}
-        password: ${VAR:your_password}
+        username: ${ADMIN_USER:admin}
+        password: ${ADMIN_PASSWORD:admin}
 eureka:
   client:
     register-with-eureka: false
     fetch-registry: false
     service-url:
-      defaultZone: http://your_user:your_password@localhost:8761/eureka/
+      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka}@localhost:8761/eureka/
   server:
     enable-self-preservation: false
     eviction-interval-timer-in-ms: 5000

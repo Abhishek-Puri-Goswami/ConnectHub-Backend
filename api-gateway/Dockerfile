@@ -1,5 +1,6 @@
 # ── Stage 1: Build ─────────────────────────────────────────────────────────────
 FROM maven:3.9-eclipse-temurin-17 AS builder
+ENV MAVEN_OPTS="-Djava.net.preferIPv4Stack=true"
 WORKDIR /build
 
 COPY pom.xml .
@@ -14,6 +15,7 @@ COPY notification-service/pom.xml notification-service/pom.xml
 COPY websocket-service/pom.xml websocket-service/pom.xml
 COPY payment-service/pom.xml payment-service/pom.xml
 COPY admin-server/pom.xml admin-server/pom.xml
+COPY code-coverage-report/pom.xml code-coverage-report/pom.xml
 
 RUN mvn -pl api-gateway -am dependency:go-offline -q
 

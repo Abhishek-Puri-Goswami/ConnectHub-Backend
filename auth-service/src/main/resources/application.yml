@@ -9,8 +9,8 @@ spring:
     name: auth-service
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/connecthub_auth?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-    username: ${MYSQL_USER:your_mysql_user}
-    password: ${MYSQL_PASSWORD:your_value}
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: none
@@ -32,13 +32,13 @@ spring:
       client:
         registration:
           google:
-            client-id: ${GOOGLE_CLIENT_ID:your_value}
-            client-secret: ${GOOGLE_CLIENT_SECRET:your_value}
+            client-id: ${GOOGLE_CLIENT_ID:}
+            client-secret: ${GOOGLE_CLIENT_SECRET:}
             scope: email, profile
             redirect-uri: "${GATEWAY_URL:http://localhost:8080}/login/oauth2/code/{registrationId}"
           github:
-            client-id: ${GITHUB_CLIENT_ID:your_value}
-            client-secret: ${GITHUB_CLIENT_SECRET:your_value}
+            client-id: ${GITHUB_CLIENT_ID:}
+            client-secret: ${GITHUB_CLIENT_SECRET:}
             scope: user:email, read:user
             redirect-uri: "${GATEWAY_URL:http://localhost:8080}/login/oauth2/code/{registrationId}"
         provider:
@@ -54,9 +54,13 @@ spring:
             user-name-attribute: id
 
 jwt:
-  secret: ${JWT_SECRET:your_value}
+  secret: ${JWT_SECRET}
   access-token-expiry: 86400000
   refresh-token-expiry: 604800000
+
+app:
+  cors:
+    allowed-origin: ${FRONTEND_URL:http://localhost:5173}
 
 oauth2:
   redirect:
@@ -65,7 +69,7 @@ oauth2:
 eureka:
   client:
     service-url:
-      defaultZone: http://your_user:your_password@${EUREKA_HOST:localhost}:8761/eureka/
+      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka}@${EUREKA_HOST:localhost}:8761/eureka/
   instance:
     prefer-ip-address: true
 
@@ -73,8 +77,8 @@ eureka:
     admin:
       client:
         url: http://${ADMIN_SERVER_HOST:localhost}:9090
-        username: ${ADMIN_USER:your_admin_user}
-        password: ${ADMIN_PASSWORD:your_value}
+        username: ${ADMIN_USER:admin}
+        password: ${ADMIN_PASSWORD:admin}
 
 management:
   endpoints:
@@ -84,6 +88,12 @@ management:
   endpoint:
     health:
       show-details: always
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_URL:http://zipkin:9411}/api/v2/spans
 
 springdoc:
   api-docs:

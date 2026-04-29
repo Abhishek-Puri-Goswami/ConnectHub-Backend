@@ -11,7 +11,7 @@ public class SubscriptionResponse {
     private Integer  userId;
     private String   plan;
     private String   status;
-    private String   razorpaySubId;
+    private String   razorpayOrderId;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
     private LocalDateTime createdAt;
