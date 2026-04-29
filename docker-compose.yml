@@ -3,11 +3,13 @@ services:
     image: mysql:8.0
     container_name: connecthub-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: Anaya@123
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports: ["3307:3306"]
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./init-databases.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./init-databases.sh:/docker-entrypoint-initdb.d/init.sh
     networks: [connecthub]
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
@@ -39,7 +41,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: connecthub-redis
-    ports: ["6379:6379"]
+    ports: ["6385:6379"]
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes: [redis_data:/data]
     networks: [connecthub]
@@ -56,9 +58,11 @@ services:
     container_name: connecthub-registry
     ports: ["8761:8761"]
     environment:
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD}
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     networks: [connecthub]
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8761/actuator/health"]
@@ -75,8 +79,10 @@ services:
     ports: ["19090:9090"]
     environment:
       EUREKA_HOST: service-registry
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD}
       ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     depends_on:
       service-registry: { condition: service_healthy }
     networks: [connecthub]
@@ -94,12 +100,16 @@ services:
     ports: ["8080:8080"]
     environment:
       EUREKA_HOST: service-registry
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD}
       REDIS_HOST: redis
       JWT_SECRET: ${JWT_SECRET}
       KAFKA_BROKERS: kafka:9092
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      ZIPKIN_URL: ${ZIPKIN_URL:-http://zipkin:9411}
     depends_on:
       service-registry: { condition: service_healthy }
       admin-server: { condition: service_healthy }
@@ -114,10 +124,12 @@ services:
     expose: ["8081"]
     environment:
       MYSQL_HOST: mysql
-      MYSQL_USER: ${MYSQL_USER:-parents}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-parents@top}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       REDIS_HOST: redis
       EUREKA_HOST: service-registry
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
@@ -127,9 +139,9 @@ services:
       KAFKA_BROKERS: kafka:9092
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
-      PLATFORM_ADMIN_EMAIL: ${PLATFORM_ADMIN_EMAIL:-admin@connecthub.app}
-      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:-Admin@ConnectHub2024!}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      PLATFORM_ADMIN_EMAIL: ${PLATFORM_ADMIN_EMAIL}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
       mysql: { condition: service_healthy }
@@ -146,14 +158,16 @@ services:
     expose: ["8082"]
     environment:
       MYSQL_HOST: mysql
-      MYSQL_USER: ${MYSQL_USER:-parents}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-parents@top}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       EUREKA_HOST: service-registry
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD}
       REDIS_HOST: redis
       KAFKA_BROKERS: kafka:9092
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
       mysql: { condition: service_healthy }
@@ -170,14 +184,16 @@ services:
     expose: ["8083"]
     environment:
       MYSQL_HOST: mysql
-      MYSQL_USER: ${MYSQL_USER:-parents}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-parents@top}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       EUREKA_HOST: service-registry
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD}
       REDIS_HOST: redis
       KAFKA_BROKERS: kafka:9092
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
       mysql: { condition: service_healthy }
@@ -194,18 +210,20 @@ services:
     expose: ["8084"]
     environment:
       MYSQL_HOST: mysql
-      MYSQL_USER: ${MYSQL_USER:-parents}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-parents@top}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       REDIS_HOST: redis
       EUREKA_HOST: service-registry
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-AKIA4QN4IBPDDMF52656}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-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}
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_S3_BUCKET: ${AWS_S3_BUCKET:-connecthub-media-bucket}
       AWS_REGION: ${AWS_REGION:-ap-south-1}
       KAFKA_BROKERS: kafka:9092
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
       mysql: { condition: service_healthy }
@@ -222,9 +240,11 @@ services:
     environment:
       REDIS_HOST: redis
       EUREKA_HOST: service-registry
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD}
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     depends_on:
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
@@ -239,21 +259,23 @@ services:
     expose: ["8086"]
     environment:
       MYSQL_HOST: mysql
-      MYSQL_USER: ${MYSQL_USER:-parents}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-parents@top}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       REDIS_HOST: redis
       EUREKA_HOST: service-registry
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD}
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
       MAIL_PORT: ${MAIL_PORT:-587}
-      MAIL_USERNAME: ${MAIL_USERNAME:-}
-      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
       KAFKA_BROKERS: kafka:9092
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
-      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
-      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
-      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-+15072644512}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
     depends_on:
       kafka: { condition: service_healthy }
       mysql: { condition: service_healthy }
@@ -271,11 +293,13 @@ services:
     environment:
       REDIS_HOST: redis
       EUREKA_HOST: service-registry
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       KAFKA_BROKERS: kafka:9092
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -291,23 +315,38 @@ services:
     expose: ["8088"]
     environment:
       MYSQL_HOST: mysql
-      MYSQL_USER: ${MYSQL_USER:-parents}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-parents@top}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      REDIS_HOST: redis
       EUREKA_HOST: service-registry
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD}
       KAFKA_BROKERS: kafka:9092
       JWT_SECRET: ${JWT_SECRET}
-      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-rzp_test_SeQvYvdnQftdy3}
-      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-cv4EB5dYNqhl2WfdeBH8cn2w}
-      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-placeholder}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET}
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin@connecthub}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
       mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
       admin-server: { condition: service_healthy }
     networks: [connecthub]
+
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: connecthub-zipkin
+    ports: ["9411:9411"]
+    networks: [connecthub]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9411/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
 volumes:
   mysql_data:

@@ -93,6 +93,9 @@ public class MediaService {
     @Value("${aws.region:us-east-1}")
     private String region;
 
+    @Value("${aws.cloudfront.domain:}")
+    private String cloudfrontDomain;
+
     /*
      * Image MIME types that receive thumbnail generation.
      * Non-image ALLOWED types (PDF, Word, ZIP, text) are stored as-is without thumbnails.
@@ -173,7 +176,7 @@ public class MediaService {
                             .build(),
                     RequestBody.fromFile(tempFile.toFile()));
 
-            String url = String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, s3Key);
+            String url = buildMediaUrl(s3Key);
 
             /*
              * Thumbnail generation: for images, create a 300x300 JPEG using Thumbnailator
@@ -197,7 +200,7 @@ public class MediaService {
                                     .build(),
                             RequestBody.fromFile(tempThumb.toFile()));
 
-                    thumbnailUrl = String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, thumbKey);
+                    thumbnailUrl = buildMediaUrl(thumbKey);
                 } catch (Exception e) {
                     log.warn("Thumbnail generation failed: {}", e.getMessage());
                 } finally {
@@ -272,6 +275,13 @@ public class MediaService {
             }
             repo.delete(f);
         });
+    }
+
+    private String buildMediaUrl(String s3Key) {
+        if (cloudfrontDomain != null && !cloudfrontDomain.isBlank()) {
+            return "https://" + cloudfrontDomain + "/" + s3Key;
+        }
+        return String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, s3Key);
     }
 
     /**

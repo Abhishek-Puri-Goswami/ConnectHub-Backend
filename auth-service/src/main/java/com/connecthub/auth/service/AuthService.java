@@ -53,6 +53,9 @@ public interface AuthService {
     User suspendUser(int userId);
     User reactivateUser(int userId);
     void deleteUser(int userId);
+    /** P2-15: Self-service account deletion with password confirmation for LOCAL users */
+    void selfDeleteAccount(int userId, String password);
     List<User> getAllUsers();
     List<UserProfileDto> getUsersByIds(List<Integer> ids);
+    User changeRole(int userId, String role);
 }

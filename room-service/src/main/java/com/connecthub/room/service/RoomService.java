@@ -281,12 +281,18 @@ public class RoomService {
     }
 
     /**
-     * updateLastMessageAt — updates the room's activity timestamp to now.
-     * Called by websocket-service via Feign after each new message.
-     * This timestamp drives the sidebar sort order in getRoomsByUser().
+     * updateLastMessageAt — updates the room's activity timestamp, preview text,
+     * and sender ID. Called by websocket-service via Feign after each new message.
+     * The preview and senderId are shown in the sidebar without needing to load
+     * full message history, matching the WhatsApp-style last-message display.
      */
-    public void updateLastMessageAt(String roomId) {
-        roomRepo.findByRoomId(roomId).ifPresent(r -> { r.setLastMessageAt(LocalDateTime.now()); roomRepo.save(r); });
+    public void updateLastMessageAt(String roomId, String preview, Integer senderId) {
+        roomRepo.findByRoomId(roomId).ifPresent(r -> {
+            r.setLastMessageAt(LocalDateTime.now());
+            if (preview != null) r.setLastMessagePreview(preview.length() > 200 ? preview.substring(0, 200) : preview);
+            if (senderId != null) r.setLastMessageSenderId(senderId);
+            roomRepo.save(r);
+        });
     }
 
     /**
@@ -373,4 +379,65 @@ public class RoomService {
         }
         return roomName.trim();
     }
+
+    /**
+     * P2-14: searchRooms — searches public GROUP rooms by name or description keyword.
+     * Only non-private GROUP rooms are returned. DMs and private rooms are never searchable.
+     */
+    @Transactional(readOnly = true)
+    public List<Room> searchRooms(String query) {
+        if (query == null || query.isBlank()) return List.of();
+        return roomRepo.searchPublicRooms(query.trim());
+    }
+
+    /**
+     * P2-13: generateInviteCode — creates a unique, random invite code for a room.
+     * Only the room admin (createdById) can generate invite codes. The code is an
+     * 8-character alphanumeric string stored on the room entity.
+     */
+    public String generateInviteCode(String roomId, int userId) {
+        Room room = roomRepo.findByRoomId(roomId)
+                .orElseThrow(() -> new ResourceNotFoundException("Room not found"));
+        if (room.getCreatedById() != userId) {
+            throw new ForbiddenException("Only the room creator can generate invite codes");
+        }
+        if (ROOM_TYPE_DM.equals(room.getType())) {
+            throw new BadRequestException("DMs do not support invite codes");
+        }
+        String code = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        room.setInviteCode(code);
+        roomRepo.save(room);
+        log.info("Invite code {} generated for room {}", code, roomId);
+        return code;
+    }
+
+    /**
+     * P2-13: joinByInviteCode — allows a user to join a room using a shared invite code.
+     * The invite code is validated and the user is added as a MEMBER. If the user
+     * is already a member, the existing membership is returned silently (idempotent).
+     */
+    public RoomMember joinByInviteCode(String inviteCode, int userId) {
+        Room room = roomRepo.findByInviteCode(inviteCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid invite code"));
+        if (memberRepo.existsByRoomIdAndUserId(room.getRoomId(), userId)) {
+            return memberRepo.findByRoomIdAndUserId(room.getRoomId(), userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Member not found"));
+        }
+        return addMember(room.getRoomId(), userId, "MEMBER");
+    }
+
+    /**
+     * P2-13: revokeInviteCode — removes the invite code from a room, disabling link sharing.
+     */
+    public void revokeInviteCode(String roomId, int userId) {
+        Room room = roomRepo.findByRoomId(roomId)
+                .orElseThrow(() -> new ResourceNotFoundException("Room not found"));
+        if (room.getCreatedById() != userId) {
+            throw new ForbiddenException("Only the room creator can revoke invite codes");
+        }
+        room.setInviteCode(null);
+        roomRepo.save(room);
+        log.info("Invite code revoked for room {}", roomId);
+    }
 }
+

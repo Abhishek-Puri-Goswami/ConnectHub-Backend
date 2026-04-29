@@ -91,6 +91,7 @@ public class JwtUtil {
         claims.put("role", user.getRole());
         claims.put("subscriptionTier",
                 user.getSubscriptionTier() != null ? user.getSubscriptionTier() : "FREE");
+        claims.put("jti", java.util.UUID.randomUUID().toString());
         return Jwts.builder()
                 .subject(String.valueOf(user.getUserId()))
                 .claims(claims)
@@ -161,5 +162,14 @@ public class JwtUtil {
     /** getAccessExpiry — exposes the configured access token lifetime (in ms). */
     public long getAccessExpiry() {
         return accessExpiry;
+    }
+
+    /**
+     * extractClaim — generic claim extractor using a resolver function.
+     * Example: extractClaim(token, c -> c.get("jti", String.class))
+     */
+    public <T> T extractClaim(String token, java.util.function.Function<Claims, T> resolver) {
+        Claims claims = parseToken(token);
+        return resolver.apply(claims);
     }
 }

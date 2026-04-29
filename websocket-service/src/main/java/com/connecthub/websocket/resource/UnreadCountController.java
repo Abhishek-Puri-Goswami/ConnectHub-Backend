@@ -3,10 +3,7 @@ package com.connecthub.websocket.resource;
 import com.connecthub.websocket.service.UnreadCountService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
@@ -20,5 +17,11 @@ public class UnreadCountController {
     @GetMapping("/{userId}")
     public ResponseEntity<Map<String, Long>> getUnreadCounts(@PathVariable int userId) {
         return ResponseEntity.ok(unreadCountService.getAllForUser(userId));
+    }
+
+    @DeleteMapping("/{userId}")
+    public ResponseEntity<Void> resetUnreadCount(@PathVariable int userId, @RequestParam String roomId) {
+        unreadCountService.reset(userId, roomId);
+        return ResponseEntity.noContent().build();
     }
 }

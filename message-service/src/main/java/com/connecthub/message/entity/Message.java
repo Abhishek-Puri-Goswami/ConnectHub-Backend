@@ -1,4 +1,5 @@
 package com.connecthub.message.entity;
+import com.connecthub.message.dto.MessagePreviewDto;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -21,4 +22,6 @@ public class Message {
     @Column(nullable = false, length = 20) @Builder.Default private String deliveryStatus = "SENT";
     @CreationTimestamp @Column(updatable = false) private LocalDateTime sentAt;
     private LocalDateTime editedAt;
+    /** Populated at query-time (not persisted) — preview of the replied-to message. */
+    @Transient private MessagePreviewDto replyTo;
 }

@@ -1,12 +1,16 @@
 package com.connecthub.auth.resource;
 
+import com.connecthub.auth.config.IpRateLimiter;
 import com.connecthub.auth.dto.*;
 import com.connecthub.auth.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -14,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -23,8 +29,20 @@ class AuthResourceTest {
     @Mock
     private AuthService authService;
 
+    @Mock
+    private IpRateLimiter ipRateLimiter;
+
+    @Mock
+    private StringRedisTemplate redis;
+
     @InjectMocks
     private AuthResource authResource;
+
+    @BeforeEach
+    void setUp() {
+        when(ipRateLimiter.tryAcquireOtp(any())).thenReturn(true);
+        when(ipRateLimiter.tryAcquireForgotPassword(any())).thenReturn(true);
+    }
     
     private AuthResponse dummyAuth() {
         return new AuthResponse("token", "Bearer", "refresh", 3600L, null);
@@ -70,7 +88,7 @@ class AuthResourceTest {
     void requestPhoneOtp() {
         PhoneOtpRequest req = new PhoneOtpRequest();
         when(authService.requestPhoneOtp(req)).thenReturn(dummyApi(null, "Sent"));
-        assertEquals(HttpStatus.OK, authResource.requestPhoneOtp(req).getStatusCode());
+        assertEquals(HttpStatus.OK, authResource.requestPhoneOtp(req, mock(HttpServletRequest.class)).getStatusCode());
     }
 
     @Test
@@ -97,7 +115,7 @@ class AuthResourceTest {
     void requestEmailLoginOtp() {
         EmailLoginOtpRequest req = new EmailLoginOtpRequest();
         when(authService.requestEmailLoginOtp(req)).thenReturn(dummyApi(null, "Sent"));
-        assertEquals(HttpStatus.OK, authResource.requestEmailLoginOtp(req).getStatusCode());
+        assertEquals(HttpStatus.OK, authResource.requestEmailLoginOtp(req, mock(HttpServletRequest.class)).getStatusCode());
     }
 
     @Test
@@ -111,7 +129,7 @@ class AuthResourceTest {
     void requestPhoneLoginOtp() {
         PhoneOtpRequest req = new PhoneOtpRequest();
         when(authService.requestPhoneLoginOtp(req)).thenReturn(dummyApi(null, "Sent"));
-        assertEquals(HttpStatus.OK, authResource.requestPhoneLoginOtp(req).getStatusCode());
+        assertEquals(HttpStatus.OK, authResource.requestPhoneLoginOtp(req, mock(HttpServletRequest.class)).getStatusCode());
     }
 
     @Test
@@ -143,7 +161,7 @@ class AuthResourceTest {
     void forgotPassword() {
         ForgotPasswordRequest req = new ForgotPasswordRequest();
         when(authService.forgotPassword(req)).thenReturn(dummyApi(null, "Sent"));
-        assertEquals(HttpStatus.OK, authResource.forgotPassword(req).getStatusCode());
+        assertEquals(HttpStatus.OK, authResource.forgotPassword(req, mock(HttpServletRequest.class)).getStatusCode());
     }
 
     @Test
@@ -169,7 +187,7 @@ class AuthResourceTest {
 
     @Test
     void profileManagement() {
-        assertEquals(HttpStatus.OK, authResource.getProfile(1).getStatusCode());
+        assertEquals(HttpStatus.OK, authResource.getProfile(1, null).getStatusCode());
         
         UpdateProfileRequest updateReq = new UpdateProfileRequest();
         assertEquals(HttpStatus.FORBIDDEN, authResource.updateProfile(1, 2, "USER", updateReq).getStatusCode());

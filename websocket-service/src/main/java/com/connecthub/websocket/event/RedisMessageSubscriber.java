@@ -127,6 +127,40 @@ public class RedisMessageSubscriber implements MessageListener {
                         deliveryService.pushNotification(recipientId, notif);
                     }
                 }
+                case RedisConfig.PIN_CHANNEL -> {
+                    PinMessagePayload p = objectMapper.readValue(message.getBody(), PinMessagePayload.class);
+                    messaging.convertAndSend("/topic/room/" + p.getRoomId() + "/pin", p);
+                }
+                case RedisConfig.READ_CHANNEL -> {
+                    /*
+                     * Read receipt — fan out to the room topic so the sender (and any other
+                     * room member) can update their delivery tick to "READ".
+                     */
+                    ReadReceiptPayload p = objectMapper.readValue(message.getBody(), ReadReceiptPayload.class);
+                    messaging.convertAndSend("/topic/room/" + p.getRoomId() + "/read", p);
+                }
+                case RedisConfig.DELIVERY_ACK_CHANNEL -> {
+                    /*
+                     * Delivery acknowledgment — deliver directly to the sender's personal queue
+                     * so their UI can update the message tick from SENT → DELIVERED.
+                     */
+                    Map<String, Object> ack = objectMapper.readValue(message.getBody(), Map.class);
+                    Object senderIdObj = ack.get("senderId");
+                    if (senderIdObj != null) {
+                        messaging.convertAndSendToUser(senderIdObj.toString(), "/queue/delivery-ack", ack);
+                    }
+                }
+                case RedisConfig.SUSPENDED_CHANNEL -> {
+                    /*
+                     * Account suspension — push directly to the target user's personal queue.
+                     * The frontend ChatLayout receives this, sets active=false in authStore,
+                     * and ProtectedRoute immediately renders the SuspendedPage.
+                     * The message body is just the userId string published by auth-service.
+                     */
+                    String userId = new String(message.getBody()).trim();
+                    messaging.convertAndSendToUser(userId, "/queue/notifications",
+                            java.util.Map.of("type", "ACCOUNT_SUSPENDED"));
+                }
                 default -> log.warn("Unknown Redis channel: {}", channel);
             }
         } catch (Exception e) {

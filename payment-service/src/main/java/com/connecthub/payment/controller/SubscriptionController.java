@@ -13,10 +13,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Subscription management endpoints.
- * All routes require authentication (JWT via X-User-Id header injected by gateway).
+ * All routes require authentication (JWT via X-User-Id header injected by
+ * gateway).
  */
 @RestController
 @RequestMapping("/api/v1/payments/subscription")
@@ -28,20 +30,28 @@ public class SubscriptionController {
     private final SubscriptionService subscriptionService;
 
     /**
-     * Creates (or returns existing) Razorpay subscription for the calling user.
-     * The returned subscriptionId is passed to Razorpay Checkout on the frontend.
+     * Creates (or returns existing) one-time Razorpay order for the calling user.
+     * The returned razorpayOrderId is passed to Razorpay Checkout on the frontend.
      */
     @PostMapping("/create")
-    @Operation(summary = "Create subscription", description = "Initiates a new Razorpay subscription for the authenticated user")
+    @Operation(summary = "Create payment order", description = "Initiates a one-time Razorpay order for the authenticated user")
     public ResponseEntity<SubscriptionResponse> createSubscription(
             @RequestHeader("X-User-Id") Integer userId,
             @RequestHeader(value = "X-User-Email", required = false) String userEmail,
             @Valid @RequestBody CreateSubscriptionRequest req) {
 
         req.setUserId(userId);
-        SubscriptionResponse response = subscriptionService.createSubscription(
-                userId, req.getPlanId(), req.getTotalCount(), userEmail);
+        SubscriptionResponse response = subscriptionService.createOrder(userId, userEmail);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Returns frontend checkout config (Razorpay key + amount in paise).
+     */
+    @GetMapping("/config")
+    @Operation(summary = "Get checkout config")
+    public ResponseEntity<Map<String, Object>> getConfig() {
+        return ResponseEntity.ok(subscriptionService.getConfig());
     }
 
     /**

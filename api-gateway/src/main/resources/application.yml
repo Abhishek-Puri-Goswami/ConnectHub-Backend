@@ -93,16 +93,20 @@ spring:
     admin:
       client:
         url: http://${ADMIN_SERVER_HOST:localhost}:9090
-        username: ${ADMIN_USER:your_admin_user}
-        password: ${ADMIN_PASSWORD:your_value}
+        username: ${ADMIN_USER:admin}
+        password: ${ADMIN_PASSWORD:admin}
+
+app:
+  cors:
+    allowed-origin: ${FRONTEND_URL:http://localhost:5173}
 
 jwt:
-  secret: ${JWT_SECRET:your_value}
+  secret: ${JWT_SECRET}
 
 eureka:
   client:
     service-url:
-      defaultZone: http://your_user:your_password@${EUREKA_HOST:localhost}:8761/eureka/
+      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka}@${EUREKA_HOST:localhost}:8761/eureka/
   instance:
     prefer-ip-address: true
 
@@ -123,6 +127,12 @@ management:
   endpoint:
     health:
       show-details: always
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_URL:http://zipkin:9411}/api/v2/spans
 
 # â”€â”€ Swagger Aggregation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each service exposes /v3/api-docs. The gateway proxies them under /xxx-docs/**

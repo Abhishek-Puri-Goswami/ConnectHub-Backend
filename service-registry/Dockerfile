@@ -1,5 +1,6 @@
-# ── Stage 1: Build ─────────────────────────────────────────────────────────────
+﻿# â”€â”€ Stage 1: Build â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 FROM maven:3.9-eclipse-temurin-17 AS builder
+ENV MAVEN_OPTS="-Djava.net.preferIPv4Stack=true"
 WORKDIR /build
 
 # Copy parent pom first (for dependency caching)
@@ -15,6 +16,7 @@ COPY notification-service/pom.xml notification-service/pom.xml
 COPY websocket-service/pom.xml websocket-service/pom.xml
 COPY payment-service/pom.xml payment-service/pom.xml
 COPY admin-server/pom.xml admin-server/pom.xml
+COPY code-coverage-report/pom.xml code-coverage-report/pom.xml
 
 # Download dependencies (cached layer)
 RUN mvn -pl service-registry -am dependency:go-offline -q
@@ -23,7 +25,7 @@ RUN mvn -pl service-registry -am dependency:go-offline -q
 COPY service-registry/src service-registry/src
 RUN mvn -pl service-registry -am package -DskipTests -q
 
-# ── Stage 2: Runtime ────────────────────────────────────────────────────────────
+# â”€â”€ Stage 2: Runtime â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 COPY --from=builder /build/service-registry/target/*.jar app.jar
