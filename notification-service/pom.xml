@@ -26,6 +26,10 @@
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-thymeleaf</artifactId><version>3.2.5</version></dependency>
         <!-- Twilio SMS SDK -->
         <dependency><groupId>com.twilio.sdk</groupId><artifactId>twilio</artifactId><version>10.1.5</version></dependency>
+        <!-- Firebase Admin SDK (optional — only active when FIREBASE_SERVICE_ACCOUNT_JSON env var is set) -->
+        <dependency><groupId>com.google.firebase</groupId><artifactId>firebase-admin</artifactId><version>9.2.0</version></dependency>
+        <dependency><groupId>io.micrometer</groupId><artifactId>micrometer-tracing-bridge-otel</artifactId></dependency>
+        <dependency><groupId>io.opentelemetry</groupId><artifactId>opentelemetry-exporter-zipkin</artifactId></dependency>
     </dependencies>
 
     <build>
