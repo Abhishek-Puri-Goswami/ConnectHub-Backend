@@ -1,6 +1,8 @@
 package com.connecthub.notification.listener;
 
 import com.connecthub.notification.entity.Notification;
+import com.connecthub.notification.repository.DeviceTokenRepository;
+import com.connecthub.notification.service.FcmService;
 import com.connecthub.notification.service.NotifService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -10,6 +12,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
@@ -18,6 +22,8 @@ class KafkaNotificationListenerTest {
 
     @Mock NotifService notifService;
     @Mock ObjectMapper objectMapper;
+    @Mock FcmService fcmService;
+    @Mock DeviceTokenRepository deviceTokenRepository;
 
     @InjectMocks KafkaNotificationListener listener;
 

@@ -1,5 +1,6 @@
-# ── Stage 1: Build ─────────────────────────────────────────────────────────────
+﻿# â”€â”€ Stage 1: Build â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 FROM maven:3.9-eclipse-temurin-17 AS builder
+ENV MAVEN_OPTS="-Djava.net.preferIPv4Stack=true"
 WORKDIR /build
 
 COPY pom.xml .
@@ -21,7 +22,7 @@ RUN mvn -pl websocket-service -am dependency:go-offline -q
 COPY websocket-service/src websocket-service/src
 RUN mvn -pl websocket-service -am package -DskipTests -q
 
-# ── Stage 2: Runtime ────────────────────────────────────────────────────────────
+# â”€â”€ Stage 2: Runtime â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 COPY --from=builder /build/websocket-service/target/*.jar app.jar

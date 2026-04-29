@@ -94,9 +94,23 @@ class AuthServiceImplTest {
         RegisterRequest req = new RegisterRequest();
         req.setEmail("new@test.com");
         req.setUsername("taken");
+        req.setPhoneNumber("+919876543210");
         req.setPassword("P@ss1234");
         when(userRepository.existsByEmail(any())).thenReturn(false);
         when(userRepository.existsByUsername("taken")).thenReturn(true);
+        assertThrows(DuplicateResourceException.class, () -> authService.register(req));
+    }
+
+    @Test
+    void register_duplicatePhone_throws() {
+        RegisterRequest req = new RegisterRequest();
+        req.setEmail("new@test.com");
+        req.setUsername("newuser");
+        req.setPhoneNumber("+919876543210");
+        req.setPassword("P@ss1234");
+        when(userRepository.existsByEmail(any())).thenReturn(false);
+        when(userRepository.existsByUsername(any())).thenReturn(false);
+        when(userRepository.existsByPhoneNumber("+919876543210")).thenReturn(true);
         assertThrows(DuplicateResourceException.class, () -> authService.register(req));
     }
 
@@ -406,6 +420,15 @@ class AuthServiceImplTest {
         assertThrows(DuplicateResourceException.class, () -> authService.updateProfile(1, req));
     }
 
+    @Test
+    void updateProfile_phoneConflict_throws() {
+        UpdateProfileRequest req = new UpdateProfileRequest();
+        req.setPhoneNumber("+919912345678");
+        when(userRepository.findById(1)).thenReturn(Optional.of(testUser));
+        when(userRepository.existsByPhoneNumber("+919912345678")).thenReturn(true);
+        assertThrows(DuplicateResourceException.class, () -> authService.updateProfile(1, req));
+    }
+
     // ── changePassword ───────────────────────────────────────────────────────
 
     @Test
@@ -495,6 +518,7 @@ class AuthServiceImplTest {
         req.setEmail("user@test.com");
         req.setOtp("000000");
         testUser.setEmailVerified(false);
+        when(otpService.verify("register", "user@test.com", "000000")).thenReturn(true);
         when(userRepository.findByEmail("user@test.com")).thenReturn(Optional.of(testUser));
         when(userRepository.save(any())).thenReturn(testUser);
         when(jwtUtil.generateAccessToken(any())).thenReturn("at");

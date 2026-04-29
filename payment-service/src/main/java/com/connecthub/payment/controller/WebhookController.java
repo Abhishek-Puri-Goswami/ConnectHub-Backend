@@ -21,11 +21,8 @@ import org.springframework.web.bind.annotation.*;
  *     because Razorpay cannot send a user JWT.
  *
  * Handled events:
- *  - subscription.activated  → set status=ACTIVE, publish Kafka PRO event
- *  - subscription.cancelled  → set status=CANCELLED, publish Kafka FREE event
- *  - subscription.completed  → set status=EXPIRED, publish Kafka FREE event
- *  - payment.captured        → record Payment(CAPTURED)
- *  - payment.failed          → record Payment(FAILED)
+ *  - payment.captured  → record Payment(CAPTURED) and activate PRO plan
+ *  - payment.failed    → record Payment(FAILED)
  */
 @RestController
 @RequestMapping("/api/v1/payments/webhook")

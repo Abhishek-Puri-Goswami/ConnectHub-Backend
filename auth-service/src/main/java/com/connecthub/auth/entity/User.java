@@ -7,7 +7,11 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class User {
 
     @Id
@@ -26,7 +30,7 @@ public class User {
     @Column(length = 100)
     private String fullName;
 
-    @Column(length = 20)
+    @Column(unique = true, length = 20)
     private String phoneNumber;
 
     @Column(length = 500)
@@ -35,27 +39,34 @@ public class User {
     @Column(length = 200)
     private String bio;
 
-    @Column(nullable = false, length = 20) @Builder.Default
+    @Column(nullable = false, length = 20)
+    @Builder.Default
     private String status = "OFFLINE";
 
-    @Column(nullable = false, length = 20) @Builder.Default
+    @Column(nullable = false, length = 20)
+    @Builder.Default
     private String provider = "LOCAL";
 
     private String providerId;
 
-    @Column(nullable = false) @Builder.Default
+    @Column(nullable = false)
+    @Builder.Default
     private boolean active = true;
 
-    @Column(nullable = false) @Builder.Default
+    @Column(nullable = false)
+    @Builder.Default
     private boolean emailVerified = false;
 
-    @Column(nullable = false) @Builder.Default
+    @Column(nullable = false)
+    @Builder.Default
     private boolean phoneVerified = false;
 
-    @Column(nullable = false, length = 20) @Builder.Default
+    @Column(nullable = false, length = 20)
+    @Builder.Default
     private String role = "USER";
 
-    @Column(nullable = false, length = 20) @Builder.Default
+    @Column(nullable = false, length = 20)
+    @Builder.Default
     private String subscriptionTier = "FREE";
 
     private LocalDateTime lastSeenAt;

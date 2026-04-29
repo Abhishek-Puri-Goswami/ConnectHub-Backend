@@ -1,6 +1,7 @@
 package com.connecthub.notification.resource;
 
 import com.connecthub.notification.entity.Notification;
+import com.connecthub.notification.repository.DeviceTokenRepository;
 import com.connecthub.notification.service.NotifService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,11 +23,14 @@ class NotifResourceTest {
     @Mock
     private NotifService service;
 
+    @Mock
+    private DeviceTokenRepository deviceTokenRepo;
+
     private NotifResource resource;
 
     @BeforeEach
     void setUp() {
-        resource = new NotifResource(service);
+        resource = new NotifResource(service, deviceTokenRepo);
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.connecthub.gateway.filter;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
@@ -24,12 +26,6 @@ import reactor.core.publisher.Mono;
  *     - doOnError: fires if any unhandled exception propagates through the
  *       chain — logs the error message.
  *
- * WHY System.out.println INSTEAD OF A LOGGER:
- *   This is a simple development-time logging filter. In production you would
- *   replace this with a proper SLF4J logger (log.info / log.error) and include
- *   the X-Trace-Id header in the log line so entries can be correlated across
- *   microservices. For now, stdout is enough for local debugging.
- *
  * NOTE ON REACTIVE LOGGING:
  *   The "GATEWAY REQ" line is logged synchronously before the reactive chain starts.
  *   The "GATEWAY RES" and "GATEWAY ERR" lines are logged in reactive callbacks
@@ -40,19 +36,21 @@ import reactor.core.publisher.Mono;
 @Component
 public class LoggingFilter implements WebFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(LoggingFilter.class);
+
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         /* Log the incoming request — method (GET, POST, etc.) and the full URI */
-        System.out.println("GATEWAY REQ: " + exchange.getRequest().getMethod() + " " + exchange.getRequest().getURI());
+        log.info("GATEWAY REQ: {} {}", exchange.getRequest().getMethod(), exchange.getRequest().getURI());
 
         return chain.filter(exchange)
                 .doOnSuccess(v -> {
                     /* Log the HTTP response status code after the response is written */
-                    System.out.println("GATEWAY RES: " + exchange.getResponse().getStatusCode());
+                    log.info("GATEWAY RES: {}", exchange.getResponse().getStatusCode());
                 })
                 .doOnError(err -> {
                     /* Log any unhandled exception that propagated to this filter level */
-                    System.out.println("GATEWAY ERR: " + err.getMessage());
+                    log.error("GATEWAY ERR: {}", err.getMessage(), err);
                 });
     }
 }

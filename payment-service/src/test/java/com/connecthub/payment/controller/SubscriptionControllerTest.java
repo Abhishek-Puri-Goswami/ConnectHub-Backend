@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,18 +29,25 @@ class SubscriptionControllerTest {
     private SubscriptionController subscriptionController;
 
     @Test
-    void createSubscription() {
-        CreateSubscriptionRequest req = new CreateSubscriptionRequest();
-        req.setPlanId("plan_1");
-        req.setTotalCount(12);
-        
+    void createOrder_returnsOk() {
         SubscriptionResponse sr = SubscriptionResponse.builder().build();
-        when(subscriptionService.createSubscription(1, "plan_1", 12, null)).thenReturn(sr);
+        when(subscriptionService.createOrder(1, null)).thenReturn(sr);
 
-        ResponseEntity<SubscriptionResponse> res = subscriptionController.createSubscription(1, null, req);
-        
+        ResponseEntity<SubscriptionResponse> res = subscriptionController.createSubscription(1, null, new CreateSubscriptionRequest());
+
         assertEquals(HttpStatus.OK, res.getStatusCode());
         assertEquals(sr, res.getBody());
+    }
+
+    @Test
+    void getConfig_returnsOk() {
+        Map<String, Object> cfg = Map.of("razorpayKeyId", "key", "amountPaise", 9900L);
+        when(subscriptionService.getConfig()).thenReturn(cfg);
+
+        ResponseEntity<Map<String, Object>> res = subscriptionController.getConfig();
+
+        assertEquals(HttpStatus.OK, res.getStatusCode());
+        assertEquals(cfg, res.getBody());
     }
 
     @Test
@@ -48,7 +56,7 @@ class SubscriptionControllerTest {
         when(subscriptionService.getSubscription(1)).thenReturn(Optional.of(sr));
 
         ResponseEntity<SubscriptionResponse> res = subscriptionController.getStatus(1);
-        
+
         assertEquals(HttpStatus.OK, res.getStatusCode());
         assertEquals(sr, res.getBody());
     }
@@ -58,17 +66,17 @@ class SubscriptionControllerTest {
         when(subscriptionService.getSubscription(1)).thenReturn(Optional.empty());
 
         ResponseEntity<SubscriptionResponse> res = subscriptionController.getStatus(1);
-        
+
         assertEquals(HttpStatus.NOT_FOUND, res.getStatusCode());
     }
 
     @Test
-    void getPaymentHistory() {
+    void getPaymentHistory_returnsOk() {
         List<PaymentResponse> history = List.of(PaymentResponse.builder().build());
         when(subscriptionService.getPaymentHistory(1)).thenReturn(history);
 
         ResponseEntity<List<PaymentResponse>> res = subscriptionController.getPaymentHistory(1);
-        
+
         assertEquals(HttpStatus.OK, res.getStatusCode());
         assertEquals(history, res.getBody());
     }

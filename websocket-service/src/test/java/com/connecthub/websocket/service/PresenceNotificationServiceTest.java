@@ -76,7 +76,7 @@ class PresenceNotificationServiceTest {
 
     @Test
     void broadcastOnlineSnapshot_publishesOnlineEventsExceptExcludedUser() throws Exception {
-        when(presenceServiceClient.getOnlineUserIds()).thenReturn(List.of(10, 11));
+        when(presenceServiceClient.getOnlineUserIds(any())).thenReturn(List.of(10, 11));
 
         service.broadcastOnlineSnapshot("10");
 
@@ -90,7 +90,7 @@ class PresenceNotificationServiceTest {
 
     @Test
     void broadcastOnlineSnapshot_failure_isHandled() {
-        when(presenceServiceClient.getOnlineUserIds()).thenThrow(new RuntimeException("presence down"));
+        when(presenceServiceClient.getOnlineUserIds(any())).thenThrow(new RuntimeException("presence down"));
 
         assertDoesNotThrow(() -> service.broadcastOnlineSnapshot("1"));
         verify(redis, never()).convertAndSend(anyString(), anyString());

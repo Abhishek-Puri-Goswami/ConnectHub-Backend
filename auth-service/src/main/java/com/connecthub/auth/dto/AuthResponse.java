@@ -21,5 +21,7 @@ public class AuthResponse {
         private String role;
         /** FREE | PRO — refreshed on login/refresh; upgrade PRO via payment-service + refresh token */
         private String subscriptionTier;
+        /** false when account is suspended; checked by frontend ProtectedRoute to show SuspendedPage */
+        private boolean active;
     }
 }

@@ -31,6 +31,8 @@ class ChatWebSocketHandlerTest {
     @Mock private com.connecthub.websocket.service.TypingService typingService;
     @Mock private com.connecthub.websocket.service.DeliveryService deliveryService;
     @Mock private com.connecthub.websocket.service.UnreadCountService unreadCountService;
+    @Mock private com.connecthub.websocket.client.RoomServiceClient roomServiceClient;
+    @Mock private MentionHandler mentionHandler;
     @InjectMocks private ChatWebSocketHandler handler;
 
     private SimpMessageHeaderAccessor headers;
