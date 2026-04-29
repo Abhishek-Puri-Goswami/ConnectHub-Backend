@@ -107,8 +107,49 @@ public class RoomResource {
 	}
 
 	@PutMapping("/{id}/timestamp")
-	public ResponseEntity<Void> updateTimestamp(@PathVariable String id) {
-		svc.updateLastMessageAt(id);
+	public ResponseEntity<Void> updateTimestamp(@PathVariable String id,
+			@RequestBody(required = false) java.util.Map<String, Object> body) {
+		String preview = body != null ? (String) body.get("preview") : null;
+		Integer senderId = body != null && body.get("senderId") != null
+				? Integer.parseInt(body.get("senderId").toString()) : null;
+		svc.updateLastMessageAt(id, preview, senderId);
+		return ResponseEntity.noContent().build();
+	}
+
+	// ─── P2-14: Room Search ──────────────────────────────────────────
+
+	@GetMapping("/search")
+	@Operation(summary = "Search public rooms by keyword")
+	public ResponseEntity<List<Room>> search(@RequestParam String q) {
+		return ResponseEntity.ok(svc.searchRooms(q));
+	}
+
+	// ─── P2-13: Room Invite Links ────────────────────────────────────
+
+	@PostMapping("/{id}/invite")
+	@Operation(summary = "Generate invite code for a room (admin only)")
+	public ResponseEntity<Map<String, String>> generateInviteCode(
+			@PathVariable String id,
+			@RequestHeader("X-User-Id") int uid) {
+		String code = svc.generateInviteCode(id, uid);
+		return ResponseEntity.ok(Map.of("inviteCode", code));
+	}
+
+	@PostMapping("/join/{code}")
+	@Operation(summary = "Join a room by invite code")
+	public ResponseEntity<RoomMember> joinByInvite(
+			@PathVariable String code,
+			@RequestHeader("X-User-Id") int uid) {
+		return ResponseEntity.ok(svc.joinByInviteCode(code, uid));
+	}
+
+	@DeleteMapping("/{id}/invite")
+	@Operation(summary = "Revoke invite code for a room (admin only)")
+	public ResponseEntity<Void> revokeInviteCode(
+			@PathVariable String id,
+			@RequestHeader("X-User-Id") int uid) {
+		svc.revokeInviteCode(id, uid);
 		return ResponseEntity.noContent().build();
 	}
 }
+
