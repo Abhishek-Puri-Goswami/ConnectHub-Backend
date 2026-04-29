@@ -20,5 +20,5 @@ public interface PresenceServiceClient {
     void markOffline(@PathVariable("uid") String uid, @RequestHeader("X-User-Id") String userId);
 
     @GetMapping("/api/v1/presence/online/users")
-    List<Integer> getOnlineUserIds();
+    List<Integer> getOnlineUserIds(@RequestHeader("X-User-Id") String userId);
 }

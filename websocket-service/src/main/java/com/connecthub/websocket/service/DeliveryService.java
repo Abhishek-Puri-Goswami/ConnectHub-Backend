@@ -1,6 +1,7 @@
 package com.connecthub.websocket.service;
 
 import com.connecthub.websocket.client.RoomServiceClient;
+import com.connecthub.websocket.config.RedisConfig;
 import com.connecthub.websocket.dto.ChatMessagePayload;
 import com.connecthub.websocket.dto.RoomMemberDto;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -75,8 +76,8 @@ public class DeliveryService {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final UnreadCountService unreadCountService;
 
-    private static final String PENDING_PREFIX  = "pending:messages:";
-    private static final String ONLINE_SET      = "presence:online";
+    private static final String PENDING_PREFIX   = "pending:messages:";
+    private static final String ONLINE_SET       = "presence:online";
     private static final long   PENDING_TTL_DAYS = 7;
 
     /**
@@ -92,6 +93,7 @@ public class DeliveryService {
             List<RoomMemberDto> members = roomServiceClient.getRoomMembers(
                     msg.getRoomId(), String.valueOf(msg.getSenderId()));
 
+            boolean deliveredAckSent = false;
             for (RoomMemberDto member : members) {
                 Integer memberId = member.getUserId();
                 if (memberId.equals(msg.getSenderId())) continue;
@@ -105,7 +107,15 @@ public class DeliveryService {
                  */
                 messaging.convertAndSendToUser(memberId.toString(), "/queue/messages", msg);
 
-                if (!isUserOnline(memberId)) {
+                if (isUserOnline(memberId)) {
+                    // First online recipient confirms delivery — send one DELIVERED ack to sender.
+                    // Routing through Redis ensures the ack reaches the sender even if they
+                    // are connected to a different pod.
+                    if (!deliveredAckSent) {
+                        sendDeliveryAck(msg);
+                        deliveredAckSent = true;
+                    }
+                } else {
                     queuePendingMessage(memberId, msg);
                     createNotification(memberId, msg);
                 }
@@ -185,15 +195,22 @@ public class DeliveryService {
     }
 
     /**
-     * updateRoomTimestamp — async call to room-service to update lastMessageAt.
-     * Runs on the async executor so it doesn't block the broadcast path.
+     * updateRoomTimestamp — async call to room-service to update lastMessageAt,
+     * preview text, and sender ID so the sidebar can show the last message
+     * without loading full history.
      */
     @Async("asyncExecutor")
-    public void updateRoomTimestamp(String roomId, String senderId) {
+    public void updateRoomTimestamp(ChatMessagePayload msg) {
         try {
-            roomServiceClient.updateLastMessageAt(roomId, senderId);
+            Map<String, Object> body = new HashMap<>();
+            body.put("senderId", msg.getSenderId());
+            String raw = msg.getContent();
+            if ("IMAGE".equals(msg.getType())) raw = "📷 Photo";
+            else if ("FILE".equals(msg.getType())) raw = "📎 File";
+            if (raw != null) body.put("preview", raw.length() > 200 ? raw.substring(0, 200) : raw);
+            roomServiceClient.updateLastMessageAt(msg.getRoomId(), body, String.valueOf(msg.getSenderId()));
         } catch (Exception e) {
-            log.warn("Failed to update room timestamp for {}: {}", roomId, e.getMessage());
+            log.warn("Failed to update room timestamp for {}: {}", msg.getRoomId(), e.getMessage());
         }
     }
 
@@ -233,6 +250,24 @@ public class DeliveryService {
      */
     public void pushNotification(Integer userId, Map<String, Object> notification) {
         messaging.convertAndSendToUser(userId.toString(), "/queue/notifications", notification);
+    }
+
+    /**
+     * sendDeliveryAck — publishes a DELIVERED acknowledgment to the sender via Redis pub/sub.
+     * Routing through Redis ensures the ack reaches the sender's pod regardless of which
+     * pod the delivery happened on.
+     */
+    private void sendDeliveryAck(ChatMessagePayload msg) {
+        try {
+            Map<String, Object> ack = new HashMap<>();
+            ack.put("messageId", msg.getMessageId());
+            ack.put("senderId",  msg.getSenderId());
+            ack.put("roomId",    msg.getRoomId());
+            ack.put("status",    "DELIVERED");
+            redis.convertAndSend(RedisConfig.DELIVERY_ACK_CHANNEL, mapper.writeValueAsString(ack));
+        } catch (Exception e) {
+            log.warn("Failed to send delivery ack for message {}: {}", msg.getMessageId(), e.getMessage());
+        }
     }
 
     /**

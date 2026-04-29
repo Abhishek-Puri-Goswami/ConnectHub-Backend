@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
+
+import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
@@ -139,10 +141,18 @@ public class WebSocketEventListener {
     }
 
     private boolean registerUserSession(String uid, String sessionId) {
-        if (sessionId == null || sessionId.isBlank())
-            return true;
-        Long size = redis.opsForSet().add(WS_USER_SESSIONS_PREFIX + uid, sessionId);
-        return size != null && size == 1L;
+        if (sessionId == null || sessionId.isBlank()) return true;
+        String key = WS_USER_SESSIONS_PREFIX + uid;
+        // If the user is not currently in the presence:online set, any session IDs
+        // remaining in this key are stale (from a previous crash or pod restart that
+        // skipped the clean disconnect path). Clear them so a future clean disconnect
+        // can correctly detect the user has no remaining sessions and mark them offline.
+        if (!Boolean.TRUE.equals(redis.opsForSet().isMember("presence:online", uid))) {
+            redis.delete(key);
+        }
+        Long added = redis.opsForSet().add(key, sessionId);
+        redis.expire(key, 8, TimeUnit.HOURS); // safety TTL against permanent stale accumulation
+        return added != null && added > 0;
     }
 
     private boolean unregisterUserSession(String uid, String sessionId) {
