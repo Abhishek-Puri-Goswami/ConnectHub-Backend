@@ -6,8 +6,8 @@ spring:
     name: media-service
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/connecthub_media?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-    username: ${MYSQL_USER:your_mysql_user}
-    password: ${MYSQL_PASSWORD:your_value}
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -24,7 +24,7 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
     consumer:
       group-id: media-service-group
       auto-offset-reset: earliest
@@ -34,13 +34,15 @@ aws:
     bucket: ${AWS_S3_BUCKET:connecthub-media-bucket}
   region: ${AWS_REGION:ap-south-1}
   credentials:
-    access-key: ${AWS_ACCESS_KEY_ID:your_value}
-    secret-key: ${AWS_SECRET_ACCESS_KEY:your_value}
+    access-key: ${AWS_ACCESS_KEY_ID}
+    secret-key: ${AWS_SECRET_ACCESS_KEY}
+  cloudfront:
+    domain: ${AWS_CLOUDFRONT_DOMAIN:}
 
 eureka:
   client:
     service-url:
-      defaultZone: http://your_user:your_password@${EUREKA_HOST:localhost}:8761/eureka/
+      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka}@${EUREKA_HOST:localhost}:8761/eureka/
   instance:
     prefer-ip-address: true
 
@@ -52,13 +54,19 @@ management:
   endpoint:
     health:
       show-details: always
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_URL:http://zipkin:9411}/api/v2/spans
 
   boot:
     admin:
       client:
         url: http://${ADMIN_SERVER_HOST:localhost}:9090
-        username: ${ADMIN_USER:your_admin_user}
-        password: ${ADMIN_PASSWORD:your_value}
+        username: ${ADMIN_USER:admin}
+        password: ${ADMIN_PASSWORD:admin}
 
 springdoc:
   api-docs:
