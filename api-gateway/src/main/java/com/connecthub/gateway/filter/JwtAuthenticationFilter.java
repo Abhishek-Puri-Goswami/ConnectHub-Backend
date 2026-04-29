@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -67,6 +68,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     @Value("${jwt.secret}")
     private String jwtSecret;
 
+    private final ReactiveStringRedisTemplate redisTemplate;
+
+    public JwtAuthenticationFilter(ReactiveStringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+
     /**
      * OPEN_ENDPOINTS — paths that do NOT require JWT authentication.
      * Any request whose path starts with one of these prefixes bypasses
@@ -80,17 +87,38 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      * its own signature-based authentication, not a user JWT.
      */
     private static final List<String> OPEN_ENDPOINTS = List.of(
-            "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/guest",
-            "/api/v1/auth/verify-registration-otp", "/api/v1/auth/resend-registration-otp",
-            "/api/v1/auth/forgot-password", "/api/v1/auth/verify-reset-otp",
-            "/api/v1/auth/reset-password", "/api/v1/auth/refresh", "/api/v1/auth/validate",
-            "/api/v1/auth/phone/request-otp", "/api/v1/auth/phone/verify-otp",
-            "/api/v1/auth/login/email/request-otp", "/api/v1/auth/login/email/verify-otp",
-            "/api/v1/auth/login/phone/request-otp", "/api/v1/auth/login/phone/verify-otp",
-            "/oauth2/", "/login/oauth2/",
+            "/api/v1/auth/register", 
+            "/api/v1/auth/login", 
+            "/api/v1/auth/guest",
+            "/api/v1/auth/verify-registration-otp", 
+            "/api/v1/auth/resend-registration-otp",
+            "/api/v1/auth/forgot-password", 
+            "/api/v1/auth/verify-reset-otp",
+            "/api/v1/auth/reset-password", 
+            "/api/v1/auth/refresh", 
+            "/api/v1/auth/validate",
+            "/api/v1/auth/phone/request-otp", 
+            "/api/v1/auth/phone/verify-otp",
+            "/api/v1/auth/login/email/request-otp", 
+            "/api/v1/auth/login/email/verify-otp",
+            "/api/v1/auth/login/phone/request-otp", 
+            "/api/v1/auth/login/phone/verify-otp",
+            "/oauth2/", 
+            "/login/oauth2/",
             "/ws/",
             "/api/v1/payments/webhook",
-            "/actuator/", "/swagger-ui/", "/v3/api-docs/", "/eureka"
+            "/actuator/",
+            "/swagger-ui/",
+            "/v3/api-docs/",
+            "/eureka",
+            "/auth-docs/",
+            "/room-docs/",
+            "/message-docs/",
+            "/media-docs/",
+            "/presence-docs/",
+            "/notification-docs/",
+            "/websocket-docs/",
+            "/payment-docs/"
     );
 
     /**
@@ -100,8 +128,28 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      */
     private static final String ADMIN_PATH_PREFIX = "/api/v1/auth/admin";
 
+    /**
+     * INTERNAL_HEADERS — headers that downstream services trust as identity claims.
+     * These MUST be stripped from incoming external requests before any processing
+     * to prevent header injection attacks where a malicious client sets
+     * X-User-Id: 1 to impersonate the admin user.
+     */
+    private static final List<String> INTERNAL_HEADERS = List.of(
+            "X-User-Id", "X-User-Email", "X-User-Username", "X-User-Role", "X-Subscription-Tier"
+    );
+
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        /*
+         * SECURITY: Strip all internal trusted headers from the incoming request
+         * BEFORE any other processing. This prevents external clients from injecting
+         * headers like X-User-Id that downstream services would blindly trust.
+         */
+        ServerHttpRequest strippedRequest = exchange.getRequest().mutate()
+                .headers(h -> INTERNAL_HEADERS.forEach(h::remove))
+                .build();
+        exchange = exchange.mutate().request(strippedRequest).build();
+
         String path = exchange.getRequest().getURI().getPath();
 
         /*
@@ -148,27 +196,53 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                 }
             }
 
-            /*
-             * Default the subscription tier to FREE if not present in the JWT.
-             * This handles tokens issued before the tier claim was added, or
-             * guest accounts that have no subscription record.
-             */
-            String tier = claims.get("subscriptionTier", String.class);
-            if (tier == null || tier.isBlank()) tier = "FREE";
+            String userId = claims.getSubject();
+            String jti = claims.get("jti", String.class);
+            String claimTier = claims.get("subscriptionTier", String.class);
 
             /*
-             * Mutate the request to add trusted internal headers.
-             * Downstream services use these headers to identify the caller without
-             * needing to decode or re-verify the JWT themselves.
+             * Check if this specific token (by jti) has been revoked via the session
+             * management API. If the jti blacklist key exists, reject the request.
+             * Also check the user-level invalidation key (set after password reset or
+             * revoke-all-sessions).
              */
-            ServerHttpRequest mutated = exchange.getRequest().mutate()
-                    .header("X-User-Id", claims.getSubject())
-                    .header("X-User-Email", claims.get("email", String.class))
-                    .header("X-User-Username", claims.get("username", String.class))
-                    .header("X-User-Role", claims.get("role", String.class))
-                    .header("X-Subscription-Tier", tier)
-                    .build();
-            return chain.filter(exchange.mutate().request(mutated).build());
+            final ServerWebExchange finalExchange = exchange;
+            Mono<Boolean> jtiBlacklisted = (jti != null && !jti.isBlank())
+                    ? redisTemplate.hasKey("token:blacklist:" + jti).defaultIfEmpty(false)
+                    : Mono.just(false);
+            Mono<Boolean> userInvalidated = redisTemplate.hasKey("user:invalidated:" + userId).defaultIfEmpty(false);
+            Mono<Boolean> userSuspended   = redisTemplate.hasKey("user:suspended:" + userId).defaultIfEmpty(false);
+
+            return Mono.zip(jtiBlacklisted, userInvalidated, userSuspended)
+                    .flatMap(tuple -> {
+                        if (tuple.getT1() || tuple.getT2() || tuple.getT3()) {
+                            finalExchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                            return finalExchange.getResponse().setComplete();
+                        }
+
+                        /*
+                         * Check Redis for a tier override written by KafkaSubscriptionListener after a
+                         * PRO/FREE upgrade event. If present, it supersedes the (possibly stale) JWT claim.
+                         * The key expires after 25h — slightly longer than the access token lifetime — so
+                         * fresh tokens will always carry the correct claim and never hit this key.
+                         */
+                        return redisTemplate.opsForValue().get("sub:tier:" + userId)
+                                .defaultIfEmpty("")
+                                .flatMap(tierOverride -> {
+                                    String tier = (tierOverride != null && !tierOverride.isBlank())
+                                            ? tierOverride
+                                            : (claimTier != null && !claimTier.isBlank() ? claimTier : "FREE");
+
+                                    ServerHttpRequest mutated = finalExchange.getRequest().mutate()
+                                            .header("X-User-Id", userId)
+                                            .header("X-User-Email", claims.get("email", String.class))
+                                            .header("X-User-Username", claims.get("username", String.class))
+                                            .header("X-User-Role", claims.get("role", String.class))
+                                            .header("X-Subscription-Tier", tier)
+                                            .build();
+                                    return chain.filter(finalExchange.mutate().request(mutated).build());
+                                });
+                    });
 
         } catch (Exception e) {
             /*

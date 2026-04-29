@@ -18,6 +18,10 @@ public class Room {
     @Column(nullable = false) @Builder.Default private boolean isPrivate = false;
     @Builder.Default private int maxMembers = 500;
     private LocalDateTime lastMessageAt;
+    @Column(length = 200) private String lastMessagePreview;
+    private Integer lastMessageSenderId;
     @Column(length = 36) private String pinnedMessageId;
+    /** P2-13: Shareable invite code for joining a room without a direct invitation */
+    @Column(length = 20, unique = true) private String inviteCode;
     @CreationTimestamp @Column(updatable = false) private LocalDateTime createdAt;
 }

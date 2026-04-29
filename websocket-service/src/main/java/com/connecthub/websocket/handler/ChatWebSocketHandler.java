@@ -1,6 +1,7 @@
 package com.connecthub.websocket.handler;
 
 import com.connecthub.websocket.client.MessageServiceClient;
+import com.connecthub.websocket.client.RoomServiceClient;
 import com.connecthub.websocket.config.RedisConfig;
 import com.connecthub.websocket.dto.*;
 import com.connecthub.websocket.service.DeliveryService;
@@ -81,6 +82,8 @@ public class ChatWebSocketHandler {
     private final ObjectMapper mapper;
     private final MessagePersistenceService persistenceService;
     private final MessageServiceClient messageServiceClient;
+    private final RoomServiceClient roomServiceClient;
+    private final MentionHandler mentionHandler;
     private final TypingService typingService;
     private final DeliveryService deliveryService;
     private final UnreadCountService unreadCountService;
@@ -165,6 +168,8 @@ public class ChatWebSocketHandler {
                         p.getMessageId(), persistEx.getMessage());
             }
 
+            mentionHandler.handle(p);
+
             /*
              * Step 2: Broadcast via Redis pub/sub.
              * Publishing once to CHAT_CHANNEL means RedisMessageSubscriber on every
@@ -186,7 +191,7 @@ public class ChatWebSocketHandler {
              * Step 4: Update room.lastMessageAt async so the sidebar sorts by recent
              * activity after page refresh. Not on the critical delivery path.
              */
-            deliveryService.updateRoomTimestamp(p.getRoomId(), uid);
+            deliveryService.updateRoomTimestamp(p);
 
             log.debug("Chat from user {} to room {} (id={})", uid, p.getRoomId(), p.getMessageId());
         } catch (Exception e) {
@@ -218,12 +223,19 @@ public class ChatWebSocketHandler {
      */
     @MessageMapping("/chat.read")
     public void handleRead(@Payload ReadReceiptPayload p, SimpMessageHeaderAccessor h) {
-        if (h.getUser() == null) return;
-        String uid = h.getUser().getName();
-        p.setReaderId(Integer.parseInt(uid));
-        messaging.convertAndSend("/topic/room/" + p.getRoomId() + "/read", p);
-        deliveryService.persistLastRead(p.getRoomId(), uid);
-        unreadCountService.reset(Integer.parseInt(uid), p.getRoomId());
+        try {
+            if (h.getUser() == null) return;
+            String uid = h.getUser().getName();
+            p.setReaderId(Integer.parseInt(uid));
+            // Route through Redis pub/sub so all pods broadcast to /topic/room/{roomId}/read.
+            // A direct STOMP broadcast would only reach clients on this pod, so the sender
+            // would miss the read receipt if they are connected to a different pod.
+            redis.convertAndSend(RedisConfig.READ_CHANNEL, mapper.writeValueAsString(p));
+            deliveryService.persistLastRead(p.getRoomId(), uid);
+            unreadCountService.reset(Integer.parseInt(uid), p.getRoomId());
+        } catch (Exception e) {
+            log.error("Read receipt handler error", e);
+        }
     }
 
     /**
@@ -275,6 +287,46 @@ public class ChatWebSocketHandler {
             redis.convertAndSend(RedisConfig.DELETE_CHANNEL, json);
         } catch (Exception e) {
             log.error("Delete handler error", e);
+        }
+    }
+
+    /**
+     * handlePin — pins a message in a room.
+     * Calls room-service to update the pinned message, then broadcasts the pin event
+     * via Redis so all pods push it to /topic/room/{roomId}/pin.
+     */
+    @MessageMapping("/chat.pin")
+    public void handlePin(@Payload PinMessagePayload p, SimpMessageHeaderAccessor h) {
+        try {
+            if (h.getUser() == null) return;
+            String uid = h.getUser().getName();
+            p.setPinnedBy(Integer.parseInt(uid));
+            p.setTimestamp(System.currentTimeMillis());
+            roomServiceClient.pinMessage(p.getRoomId(), p.getMessageId(), uid);
+            String json = mapper.writeValueAsString(p);
+            redis.convertAndSend(RedisConfig.PIN_CHANNEL, json);
+        } catch (Exception e) {
+            log.error("Pin handler error", e);
+        }
+    }
+
+    /**
+     * handleUnpin — removes the pinned message from a room.
+     * Sets messageId to null in the broadcast so the frontend clears the pin banner.
+     */
+    @MessageMapping("/chat.unpin")
+    public void handleUnpin(@Payload PinMessagePayload p, SimpMessageHeaderAccessor h) {
+        try {
+            if (h.getUser() == null) return;
+            String uid = h.getUser().getName();
+            p.setPinnedBy(Integer.parseInt(uid));
+            p.setTimestamp(System.currentTimeMillis());
+            p.setMessageId(null);
+            roomServiceClient.unpinMessage(p.getRoomId(), uid);
+            String json = mapper.writeValueAsString(p);
+            redis.convertAndSend(RedisConfig.PIN_CHANNEL, json);
+        } catch (Exception e) {
+            log.error("Unpin handler error", e);
         }
     }
 }

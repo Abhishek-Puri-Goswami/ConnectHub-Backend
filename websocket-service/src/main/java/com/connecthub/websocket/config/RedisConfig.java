@@ -40,12 +40,16 @@ import org.springframework.data.redis.listener.*;
  */
 @Configuration
 public class RedisConfig {
-    public static final String CHAT_CHANNEL     = "chat:messages";
-    public static final String PRESENCE_CHANNEL = "chat:presence";
-    public static final String EDIT_CHANNEL     = "chat:edits";
-    public static final String DELETE_CHANNEL   = "chat:deletes";
-    public static final String REACTION_CHANNEL = "chat:reactions";
-    public static final String NOTIF_CHANNEL    = "chat:notifications";
+    public static final String CHAT_CHANNEL         = "chat:messages";
+    public static final String PRESENCE_CHANNEL     = "chat:presence";
+    public static final String EDIT_CHANNEL         = "chat:edits";
+    public static final String DELETE_CHANNEL       = "chat:deletes";
+    public static final String REACTION_CHANNEL     = "chat:reactions";
+    public static final String NOTIF_CHANNEL        = "chat:notifications";
+    public static final String PIN_CHANNEL          = "chat:pins";
+    public static final String READ_CHANNEL         = "chat:read-receipts";
+    public static final String DELIVERY_ACK_CHANNEL = "chat:delivery-ack";
+    public static final String SUSPENDED_CHANNEL    = "chat:suspended";
 
     /**
      * container — creates the Redis pub/sub listener container and subscribes to all channels.
@@ -62,6 +66,10 @@ public class RedisConfig {
         c.addMessageListener(sub, new ChannelTopic(DELETE_CHANNEL));
         c.addMessageListener(sub, new ChannelTopic(REACTION_CHANNEL));
         c.addMessageListener(sub, new ChannelTopic(NOTIF_CHANNEL));
+        c.addMessageListener(sub, new ChannelTopic(PIN_CHANNEL));
+        c.addMessageListener(sub, new ChannelTopic(READ_CHANNEL));
+        c.addMessageListener(sub, new ChannelTopic(DELIVERY_ACK_CHANNEL));
+        c.addMessageListener(sub, new ChannelTopic(SUSPENDED_CHANNEL));
         return c;
     }
 }

@@ -7,8 +7,8 @@ spring:
     name: notification-service
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/connecthub_notification?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-    username: ${MYSQL_USER:your_mysql_user}
-    password: ${VAR:your_password}
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -23,8 +23,8 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:no.reply.connecthub@gmail.com}
-    password: ${VAR:your_password}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
@@ -35,13 +35,13 @@ spring:
 
 # Twilio SMS configuration
 twilio:
-  account-sid: ${TWILIO_ACCOUNT_SID:your_value}
-  auth-token: ${TWILIO_AUTH_TOKEN:your_value}
-  from-number: ${TWILIO_FROM_NUMBER:your_value}
+  account-sid: ${TWILIO_ACCOUNT_SID}
+  auth-token: ${TWILIO_AUTH_TOKEN}
+  from-number: ${TWILIO_FROM_NUMBER}
 eureka:
   client:
     service-url:
-      defaultZone: http://your_user:your_password@${EUREKA_HOST:localhost}:8761/eureka/
+      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka}@${EUREKA_HOST:localhost}:8761/eureka/
   instance:
     prefer-ip-address: true
 
@@ -53,13 +53,19 @@ management:
   endpoint:
     health:
       show-details: always
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_URL:http://zipkin:9411}/api/v2/spans
 
   boot:
     admin:
       client:
         url: http://${ADMIN_SERVER_HOST:localhost}:9090
-        username: ${ADMIN_USER:your_admin_user}
-        password: ${VAR:your_password}
+        username: ${ADMIN_USER:admin}
+        password: ${ADMIN_PASSWORD:admin}
 
 springdoc:
   api-docs:

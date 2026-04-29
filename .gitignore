@@ -25,3 +25,9 @@ buildNumber.properties
 .idea/
 .vscode/
 *.iml
+
+# Logs
+logs/
+*.log
+hs_err_pid*.log
+replay_pid*.log

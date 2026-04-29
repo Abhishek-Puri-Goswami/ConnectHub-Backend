@@ -74,6 +74,14 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!-- P3-20: Distributed Tracing (Micrometer + Zipkin) -->
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-tracing-bom</artifactId>
+                <version>1.2.5</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
