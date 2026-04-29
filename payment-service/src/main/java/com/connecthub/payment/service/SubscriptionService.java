@@ -22,52 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * SubscriptionService — Razorpay Subscription Lifecycle Management
- *
- * PURPOSE:
- *   Manages the full lifecycle of a user's PRO subscription: creation, activation,
- *   cancellation, expiry, and payment recording. This service is the bridge between
- *   Razorpay (the payment gateway) and the ConnectHub database and event system.
- *
- * SUBSCRIPTION FLOW (three phases):
- *   1. CREATION — createSubscription():
- *      The frontend calls this to initiate an upgrade. This service creates a
- *      Razorpay subscription via API and stores a local record with status=PENDING.
- *      The Razorpay subscription ID is returned to the frontend, which uses it to
- *      display the Razorpay payment checkout widget.
- *
- *   2. ACTIVATION — handleWebhookEvent() → activateSubscription():
- *      After the user completes payment, Razorpay sends a "subscription.activated"
- *      webhook. The subscription status is updated to ACTIVE, and a Kafka event is
- *      published to "user.subscription.status" so auth-service can update the user's
- *      subscriptionTier in the database (which flows into their JWT on next login).
- *
- *   3. TERMINATION — handleWebhookEvent() → cancelSubscription() / expireSubscription():
- *      On cancellation or plan completion, the subscription is marked CANCELLED/EXPIRED,
- *      plan is set back to FREE, and a Kafka event downgrades the user's tier.
- *
- * IDEMPOTENCY:
- *   - createSubscription() checks if the user already has an ACTIVE or PENDING PRO
- *     subscription and returns the existing one rather than creating a duplicate.
- *     This handles the case where the frontend calls the API twice (e.g., on retry).
- *   - recordPayment() checks if the Razorpay payment ID is already in the database
- *     before inserting, making webhook replay safe.
- *   - activateSubscription() handles the race condition where Razorpay sends the
- *     webhook before our createSubscription() DB write is committed: if no matching
- *     subscription row is found, it reconstructs one from the "notes.userId" field
- *     that was embedded in the Razorpay subscription at creation time.
- *
- * KAFKA EVENTS:
- *   Every status change publishes to "user.subscription.status" with userId and
- *   new plan ("PRO" or "FREE"). auth-service's KafkaSubscriptionListener consumes
- *   this to update the user entity, so the next JWT refresh reflects the correct tier.
- *
- * AMOUNTS:
- *   Razorpay stores amounts in paise (1 INR = 100 paise). Payment.amount is stored
- *   as BigDecimal with scale=2 using BigDecimal.valueOf(paise, 2) to convert properly.
- *   The frontend divides by 100 to display the human-readable rupee amount.
- */
 @SuppressWarnings("null")
 @Service
 @RequiredArgsConstructor
@@ -84,229 +38,120 @@ public class SubscriptionService {
     @Value("${razorpay.key-id}")
     private String razorpayKeyId;
 
+    @Value("${payment.pro.amount-paise}")
+    private long proAmountPaise;
+
+    /** Duration of a Premium subscription in months. */
+    private static final int SUBSCRIPTION_MONTHS = 1;
+
     /**
-     * createSubscription — initiates a new PRO subscription via Razorpay.
+     * createOrder — creates a Razorpay Order for a one-time Premium upgrade payment.
      *
-     * HOW IT WORKS:
-     *   1. Check if the user already has an ACTIVE or PENDING PRO subscription.
-     *      If so, return it immediately (idempotent — no duplicate Razorpay calls).
-     *   2. Build the Razorpay subscription options: planId, totalCount (billing cycles),
-     *      quantity=1, customer_notify=1. Embed userId in the "notes" field so it can
-     *      be recovered from the webhook if our DB write hasn't committed yet.
-     *   3. Call Razorpay API to create the subscription and get a Razorpay sub ID.
-     *   4. Persist a local Subscription record with status=PENDING. If the user has a
-     *      previous CANCELLED/EXPIRED/FREE subscription row, reuse it (to respect the
-     *      UNIQUE(user_id) constraint) rather than inserting a new one.
-     *   5. Return the SubscriptionResponse containing the Razorpay sub ID, which the
-     *      frontend passes to the Razorpay checkout widget.
-     *
-     * @param planId      Razorpay plan ID (configured in Razorpay dashboard)
-     * @param totalCount  number of billing cycles (e.g., 12 for annual)
+     * Flow:
+     *   1. If the user already has an ACTIVE Premium plan that hasn't expired, return existing.
+     *   2. Create a Razorpay Order with the configured amount (paise).
+     *   3. Persist a local Subscription row with status=PENDING and the order ID.
+     *   4. Return the order ID to the frontend to open the Razorpay widget.
      */
-    public SubscriptionResponse createSubscription(Integer userId, String planId, int totalCount, String userEmail) {
+    public SubscriptionResponse createOrder(Integer userId, String userEmail) {
         Optional<Subscription> existing = subscriptionRepo.findByUserId(userId);
         if (existing.isPresent()) {
             Subscription sub = existing.get();
-            boolean proPlan = !"FREE".equalsIgnoreCase(sub.getPlan());
-            boolean activeOrPending = "ACTIVE".equalsIgnoreCase(sub.getStatus())
-                    || "PENDING".equalsIgnoreCase(sub.getStatus());
-            if (proPlan && activeOrPending) {
-                log.info("User {} already has {} subscription {}", userId, sub.getStatus(), sub.getRazorpaySubId());
+            boolean activeAndNotExpired = "ACTIVE".equalsIgnoreCase(sub.getStatus())
+                    && !"FREE".equalsIgnoreCase(sub.getPlan())
+                    && (sub.getEndDate() == null || sub.getEndDate().isAfter(LocalDateTime.now()));
+            if (activeAndNotExpired) {
+                log.info("User {} already has an active Premium plan", userId);
                 return toResponse(sub);
             }
         }
 
         try {
             JSONObject options = new JSONObject();
-            options.put("plan_id", planId);
-            options.put("total_count", totalCount);
-            options.put("quantity", 1);
-            options.put("customer_notify", 1);
-            /*
-             * Embed userId in Razorpay notes so the webhook handler can reconstruct the
-             * subscription record if the webhook arrives before our DB write commits.
-             * This handles the rare but real race condition in distributed systems.
-             */
+            options.put("amount", proAmountPaise);
+            options.put("currency", "INR");
+            options.put("receipt", "connecthub_premium_" + userId);
             JSONObject notes = new JSONObject();
             notes.put("userId", userId);
             options.put("notes", notes);
 
-            com.razorpay.Subscription rzpSub = razorpayClient.subscriptions.create(options);
-            String rzpSubId = rzpSub.get("id");
+            com.razorpay.Order rzpOrder = razorpayClient.orders.create(options);
+            String rzpOrderId = rzpOrder.get("id");
 
-            /*
-             * Reuse the existing row if present (previous CANCELLED/FREE plan) to honor
-             * the UNIQUE(user_id) constraint rather than inserting a duplicate row.
-             */
             Subscription sub = existing.orElseGet(Subscription::new);
             sub.setUserId(userId);
             sub.setUserEmail(userEmail);
             sub.setPlan("PRO");
             sub.setStatus("PENDING");
-            sub.setRazorpaySubId(rzpSubId);
+            sub.setRazorpayOrderId(rzpOrderId);
             sub.setStartDate(LocalDateTime.now());
             sub.setEndDate(null);
 
             sub = subscriptionRepo.save(sub);
-            log.info("Created Razorpay subscription {} for user {}", rzpSubId, userId);
+            log.info("Created Razorpay order {} for user {}", rzpOrderId, userId);
             return toResponse(sub);
 
         } catch (Exception e) {
-            log.error("Failed to create Razorpay subscription for user {}: {}", userId, e.getMessage());
-            throw new RuntimeException("Could not initiate subscription: " + e.getMessage(), e);
+            log.error("Failed to create Razorpay order for user {}: {}", userId, e.getMessage());
+            throw new RuntimeException("Could not create payment order: " + e.getMessage(), e);
         }
     }
 
     /**
      * handleWebhookEvent — routes Razorpay webhook events to the appropriate handler.
-     *
-     * HOW IT WORKS:
-     *   The WebhookController receives raw Razorpay webhooks, verifies the HMAC-SHA256
-     *   signature, and calls this method with the event name and parsed payload.
-     *   This method dispatches to the correct private handler based on the event type:
-     *   - "subscription.activated" → activate the subscription and upgrade the user
-     *   - "subscription.cancelled" → cancel and downgrade the user
-     *   - "subscription.completed" → plan ended naturally, downgrade the user
-     *   - "payment.captured" / "payment.failed" → record the payment transaction
-     *   Unknown events are silently ignored (logged at DEBUG level).
      */
     public void handleWebhookEvent(String event, JSONObject payload) {
         log.info("Processing Razorpay webhook event: {}", event);
-
         switch (event) {
-            case "subscription.activated" -> activateSubscription(payload);
-            case "subscription.cancelled"  -> cancelSubscription(payload);
-            case "subscription.completed"  -> expireSubscription(payload);
-            case "payment.captured"        -> recordPayment(payload, "CAPTURED");
-            case "payment.failed"          -> recordPayment(payload, "FAILED");
+            case "payment.captured" -> recordPayment(payload, "CAPTURED");
+            case "payment.failed"   -> recordPayment(payload, "FAILED");
             default -> log.debug("Unhandled webhook event: {}", event);
         }
     }
 
     /**
-     * activateSubscription — handles the "subscription.activated" webhook.
-     *
-     * HOW IT WORKS:
-     *   Finds the local subscription row by matching the Razorpay sub ID. Updates
-     *   status to ACTIVE and publishes a Kafka event to upgrade the user to PRO.
-     *
-     *   If no local row is found (webhook race condition — arrived before our DB write),
-     *   reconstructs the subscription from the "notes.userId" field embedded at creation.
-     *   This ensures activations are never silently lost even under race conditions.
-     */
-    private void activateSubscription(JSONObject payload) {
-        JSONObject entity = payload.getJSONObject("subscription").getJSONObject("entity");
-        String rzpSubId  = entity.getString("id");
-        JSONObject notes = entity.optJSONObject("notes");
-
-        subscriptionRepo.findAll().stream()
-                .filter(s -> rzpSubId.equals(s.getRazorpaySubId()))
-                .findFirst()
-                .ifPresentOrElse(sub -> {
-                    sub.setStatus("ACTIVE");
-                    sub.setPlan("PRO");
-                    subscriptionRepo.save(sub);
-                    publishSubscriptionEvent(sub.getUserId(), "PRO");
-                    log.info("Subscription {} activated for user {}", rzpSubId, sub.getUserId());
-                }, () -> {
-                    if (notes != null && notes.has("userId")) {
-                        int userId = notes.getInt("userId");
-                        Subscription sub = Subscription.builder()
-                                .userId(userId).plan("PRO").status("ACTIVE")
-                                .razorpaySubId(rzpSubId).startDate(LocalDateTime.now())
-                                .build();
-                        subscriptionRepo.save(sub);
-                        publishSubscriptionEvent(userId, "PRO");
-                    }
-                });
-    }
-
-    /**
-     * cancelSubscription — handles the "subscription.cancelled" webhook.
-     * Updates the subscription to CANCELLED, sets endDate to now, resets plan to FREE,
-     * and publishes a Kafka event to downgrade the user's tier in auth-service.
-     */
-    private void cancelSubscription(JSONObject payload) {
-        String rzpSubId = payload.getJSONObject("subscription")
-                .getJSONObject("entity").getString("id");
-        subscriptionRepo.findAll().stream()
-                .filter(s -> rzpSubId.equals(s.getRazorpaySubId()))
-                .findFirst()
-                .ifPresent(sub -> {
-                    sub.setStatus("CANCELLED");
-                    sub.setEndDate(LocalDateTime.now());
-                    sub.setPlan("FREE");
-                    subscriptionRepo.save(sub);
-                    publishSubscriptionEvent(sub.getUserId(), "FREE");
-                    log.info("Subscription {} cancelled for user {}", rzpSubId, sub.getUserId());
-                });
-    }
-
-    /**
-     * expireSubscription — handles the "subscription.completed" webhook.
-     * Triggered when all billing cycles are exhausted (natural plan end, not cancellation).
-     * Sets status to EXPIRED and downgrades the user to FREE, same as cancellation.
-     */
-    private void expireSubscription(JSONObject payload) {
-        String rzpSubId = payload.getJSONObject("subscription")
-                .getJSONObject("entity").getString("id");
-        subscriptionRepo.findAll().stream()
-                .filter(s -> rzpSubId.equals(s.getRazorpaySubId()))
-                .findFirst()
-                .ifPresent(sub -> {
-                    sub.setStatus("EXPIRED");
-                    sub.setEndDate(LocalDateTime.now());
-                    sub.setPlan("FREE");
-                    subscriptionRepo.save(sub);
-                    publishSubscriptionEvent(sub.getUserId(), "FREE");
-                    log.info("Subscription {} expired for user {}", rzpSubId, sub.getUserId());
-                });
-    }
-
-    /**
      * recordPayment — persists a payment transaction from a Razorpay webhook.
-     *
-     * HOW IT WORKS:
-     *   1. Extract payment details from the webhook payload (ID, order ID, amount, currency).
-     *   2. Idempotency check: if this Razorpay payment ID is already in the database, skip.
-     *   3. Link the payment to the local subscription row by matching razorpaySubId.
-     *   4. Convert amount from paise to rupees using BigDecimal.valueOf(paise, 2).
-     *   5. Persist the Payment row with the given status (CAPTURED or FAILED).
-     *
-     * Called for both "payment.captured" (successful) and "payment.failed" (declined).
-     * Both are stored so the payment history page shows the full transaction log.
+     * For CAPTURED payments, also activates the Premium plan and publishes a Kafka event.
      */
     private void recordPayment(JSONObject payload, String status) {
         try {
             JSONObject entity = payload.getJSONObject("payment").getJSONObject("entity");
-            String rzpPayId   = entity.getString("id");
-            String rzpOrderId = entity.optString("order_id", null);
+            String rzpPayId    = entity.getString("id");
+            String rzpOrderId  = entity.optString("order_id", null);
             long   amountPaisa = entity.getLong("amount");
-            String currency   = entity.optString("currency", "INR");
+            String currency    = entity.optString("currency", "INR");
 
             if (paymentRepo.findByRazorpayPaymentId(rzpPayId).isPresent()) {
                 log.debug("Payment {} already recorded — skipping", rzpPayId);
                 return;
             }
 
-            String rzpSubId = entity.optString("subscription_id", null);
-            Long subId = subscriptionRepo.findAll().stream()
-                    .filter(s -> rzpSubId != null && rzpSubId.equals(s.getRazorpaySubId()))
-                    .findFirst().map(Subscription::getId).orElse(null);
+            Optional<Subscription> subOpt = rzpOrderId != null
+                    ? subscriptionRepo.findByRazorpayOrderId(rzpOrderId)
+                    : Optional.empty();
 
-            Payment payment = Payment.builder()
+            if (subOpt.isEmpty()) {
+                JSONObject notes = entity.optJSONObject("notes");
+                if (notes != null && notes.has("userId")) {
+                    subOpt = subscriptionRepo.findByUserId(notes.getInt("userId"));
+                }
+            }
+
+            Long subId = subOpt.map(Subscription::getId).orElse(null);
+
+            paymentRepo.save(Payment.builder()
                     .subscriptionId(subId)
                     .razorpayPaymentId(rzpPayId)
                     .razorpayOrderId(rzpOrderId)
                     .amount(BigDecimal.valueOf(amountPaisa, 2))
                     .currency(currency)
                     .status(status)
-                    .build();
+                    .build());
 
-            paymentRepo.save(payment);
             log.info("Payment {} recorded with status {}", rzpPayId, status);
 
             if ("CAPTURED".equals(status)) {
+                subOpt.ifPresent(this::activatePlan);
                 sendReceiptEmail(subId, amountPaisa);
             }
         } catch (Exception e) {
@@ -314,17 +159,51 @@ public class SubscriptionService {
         }
     }
 
+    /**
+     * activatePlan — marks the subscription ACTIVE with a 1-month endDate,
+     * then publishes a Kafka event so auth-service updates the user's JWT tier claim.
+     */
+    private void activatePlan(Subscription sub) {
+        LocalDateTime now = LocalDateTime.now();
+        sub.setStatus("ACTIVE");
+        sub.setPlan("PRO");
+        sub.setStartDate(now);
+        sub.setEndDate(now.plusMonths(SUBSCRIPTION_MONTHS));
+        subscriptionRepo.save(sub);
+        publishSubscriptionEvent(sub.getUserId(), "PRO");
+        log.info("Premium plan activated for user {} — expires {}", sub.getUserId(), sub.getEndDate());
+    }
+
+    /**
+     * expireOverdueSubscriptions — called by the scheduler every hour.
+     * Marks any ACTIVE subscription whose endDate has passed as EXPIRED,
+     * then publishes a Kafka event to reset the user's JWT tier claim to FREE.
+     */
+    public void expireOverdueSubscriptions() {
+        List<Subscription> overdue =
+                subscriptionRepo.findAllByStatusAndEndDateBefore("ACTIVE", LocalDateTime.now());
+        if (overdue.isEmpty()) return;
+
+        for (Subscription sub : overdue) {
+            sub.setStatus("EXPIRED");
+            subscriptionRepo.save(sub);
+            publishSubscriptionEvent(sub.getUserId(), "FREE");
+            log.info("Subscription expired for user {} (endDate={})", sub.getUserId(), sub.getEndDate());
+        }
+        log.info("Expired {} overdue Premium subscriptions", overdue.size());
+    }
+
     private void sendReceiptEmail(Long subscriptionId, long amountPaisa) {
         if (subscriptionId == null) return;
         subscriptionRepo.findById(subscriptionId).ifPresent(sub -> {
             String email = sub.getUserEmail();
             if (email == null || email.isBlank()) return;
-            String rupees = String.format("₹%.2f", amountPaisa / 100.0);
-            String payload = String.format(
-                    "{\"to\":\"%s\",\"purpose\":\"subscription_confirmation\",\"plan\":\"%s\",\"amount\":\"%s\"}",
+            String rupees = String.format("%.2f", amountPaisa / 100.0);
+            String msgPayload = String.format(
+                    "{\"to\":\"%s\",\"purpose\":\"subscription_confirmation\",\"plan\":\"%s\",\"amount\":\"₹%s\"}",
                     email, sub.getPlan(), rupees);
             try {
-                redis.convertAndSend("email:send", payload);
+                redis.convertAndSend("email:send", msgPayload);
                 log.info("Receipt email queued for user {}", sub.getUserId());
             } catch (Exception e) {
                 log.warn("Failed to queue receipt email for user {}: {}", sub.getUserId(), e.getMessage());
@@ -332,20 +211,13 @@ public class SubscriptionService {
         });
     }
 
-    /**
-     * getSubscription — returns the user's current subscription details, if any.
-     * Returns Optional.empty() for users who have never had a subscription row.
-     */
+    /** getSubscription — returns the user's current plan record, if any. */
     @Transactional(readOnly = true)
     public Optional<SubscriptionResponse> getSubscription(Integer userId) {
         return subscriptionRepo.findByUserId(userId).map(this::toResponse);
     }
 
-    /**
-     * getPaymentHistory — returns all payment transactions for a user, newest first.
-     * Used by the BillingPage frontend component to show the transaction history table.
-     * Returns an empty list if the user has no subscription record.
-     */
+    /** getPaymentHistory — returns all payment transactions for a user, newest first. */
     @Transactional(readOnly = true)
     public List<PaymentResponse> getPaymentHistory(Integer userId) {
         return subscriptionRepo.findByUserId(userId)
@@ -354,30 +226,38 @@ public class SubscriptionService {
                 .orElse(List.of());
     }
 
+    /** getConfig — returns the Razorpay key and configured amount for the frontend. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> getConfig() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("razorpayKeyId", razorpayKeyId);
+        config.put("amountPaise", proAmountPaise);
+        return config;
+    }
+
     /**
-     * publishSubscriptionEvent — publishes a tier change event to Kafka.
-     * auth-service's KafkaSubscriptionListener consumes this and updates the user's
-     * subscriptionTier field in the database. The user's next JWT refresh will then
-     * carry the correct tier in the X-Subscription-Tier claim.
+     * publishSubscriptionEvent — sends a valid JSON Kafka message so auth-service
+     * can update the user's subscriptionTier in the database and JWT claims.
+     *
+     * Previously this used HashMap.toString() which produces {key=value} — NOT valid
+     * JSON — causing auth-service's ObjectMapper.readValue() to throw JsonParseException
+     * and silently drop every subscription update.
      */
     private void publishSubscriptionEvent(Integer userId, String plan) {
-        Map<String, Object> event = new HashMap<>();
-        event.put("userId", userId);
-        event.put("status", plan);
-        kafkaTemplate.send("user.subscription.status", String.valueOf(userId), event.toString());
+        // Build valid JSON manually — avoids ObjectMapper dependency and is unambiguous
+        String json = String.format("{\"userId\":%d,\"status\":\"%s\"}", userId, plan);
+        kafkaTemplate.send("user.subscription.status", String.valueOf(userId), json);
         log.debug("Published subscription event userId={} plan={}", userId, plan);
     }
 
-    /** toResponse — maps a Subscription entity to the SubscriptionResponse DTO. */
     private SubscriptionResponse toResponse(Subscription s) {
         return SubscriptionResponse.builder()
                 .id(s.getId()).userId(s.getUserId()).plan(s.getPlan())
-                .status(s.getStatus()).razorpaySubId(s.getRazorpaySubId())
+                .status(s.getStatus()).razorpayOrderId(s.getRazorpayOrderId())
                 .startDate(s.getStartDate()).endDate(s.getEndDate())
                 .createdAt(s.getCreatedAt()).build();
     }
 
-    /** toPaymentResponse — maps a Payment entity to the PaymentResponse DTO. */
     private PaymentResponse toPaymentResponse(Payment p) {
         return PaymentResponse.builder()
                 .id(p.getId()).subscriptionId(p.getSubscriptionId())
