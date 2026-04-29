@@ -1,6 +1,8 @@
 package com.connecthub.notification.listener;
 
 import com.connecthub.notification.entity.Notification;
+import com.connecthub.notification.repository.DeviceTokenRepository;
+import com.connecthub.notification.service.FcmService;
 import com.connecthub.notification.service.NotifService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +15,9 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * KafkaNotificationListener — Consumes Offline Notification Events from Kafka
@@ -62,6 +66,8 @@ public class KafkaNotificationListener {
 
     private final NotifService notifService;
     private final ObjectMapper objectMapper;
+    private final FcmService fcmService;
+    private final DeviceTokenRepository deviceTokenRepository;
 
     /**
      * processOfflineNotification — consumes an offline notification event and persists it.
@@ -106,6 +112,13 @@ public class KafkaNotificationListener {
         notif.setCreatedAt(LocalDateTime.now());
 
         notifService.send(notif);
+
+        List<String> tokens = deviceTokenRepository.findByUserId(notif.getRecipientId())
+                .stream().map(dt -> dt.getFcmToken()).collect(Collectors.toList());
+        fcmService.sendPush(tokens, notif.getTitle(), notif.getMessage(),
+                Map.of("roomId", notif.getRoomId() != null ? notif.getRoomId() : "",
+                       "type",   notif.getType()   != null ? notif.getType()   : ""));
+
         log.info("Processed offline notification for user {} from {}[{}]@{}",
                 notif.getRecipientId(), topic, partition, offset);
     }
