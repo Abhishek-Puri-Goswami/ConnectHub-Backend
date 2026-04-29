@@ -50,7 +50,12 @@ public class PresenceNotificationService {
     @Async("asyncExecutor")
     public void broadcastOnlineSnapshot(String excludeUid) {
         try {
-            List<Integer> onlineIds = presenceServiceClient.getOnlineUserIds();
+            // Wait briefly so the frontend can subscribe to /topic/presence before the
+            // snapshot arrives. Without this delay the snapshot fires before the client's
+            // SUBSCRIBE frames are processed and the connecting user never sees existing
+            // online members.
+            Thread.sleep(400);
+            List<Integer> onlineIds = presenceServiceClient.getOnlineUserIds(excludeUid);
             for (Integer id : onlineIds) {
                 if (String.valueOf(id).equals(excludeUid)) continue;
                 PresenceUpdatePayload p = new PresenceUpdatePayload();
