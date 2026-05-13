@@ -1,0 +1,35 @@
+server:
+  port: 0  # Random port for tests
+
+spring:
+  application:
+    name: admin-server
+  config:
+    import: "optional:configserver:"  # Config server not running during unit tests
+  cloud:
+    config:
+      enabled: false
+      fail-fast: false
+  security:
+    user:
+      name: admin
+      password: admin
+  boot:
+    admin:
+      ui:
+        title: "ConnectHub Admin (Test)"
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info"
+  endpoint:
+    health:
+      show-details: always

@@ -1,0 +1,41 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: config-server
+  cloud:
+    config:
+      server:
+        git:
+          uri: ${CONFIG_REPO_URI:https://github.com/Abhishek-Puri-Goswami/ConnectHub-Config-Server.git}
+          default-label: ${CONFIG_REPO_BRANCH:main}
+          username: ${CONFIG_REPO_USERNAME:}
+          password: ${CONFIG_REPO_PASSWORD:}
+          clone-on-start: true
+          force-pull: true
+  security:
+    user:
+      name: ${CONFIG_SERVER_USER:configuser}
+      password: ${CONFIG_SERVER_PASSWORD:configpassword}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka}@${EUREKA_HOST:localhost}:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    appname: config-server
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Fix #1: removed 'env' — /actuator/env would leak CONFIG_SERVER_PASSWORD
+        # and CONFIG_REPO_PASSWORD to anyone who can reach port 8888.
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
