@@ -73,6 +73,7 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 public class WebSocketEventListener {
 
     private static final String WS_USER_SESSIONS_PREFIX = "ws:user:sessions:";
+    public static final String WS_CONNECTIONS_TOTAL = "ws:connections:total";
 
     private final StringRedisTemplate redis;
     private final ObjectMapper mapper;
