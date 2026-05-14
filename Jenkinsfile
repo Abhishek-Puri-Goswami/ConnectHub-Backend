@@ -36,7 +36,7 @@ pipeline {
 
                     // Build Docker images (Maven runs INSIDE each Dockerfile) and start everything!
                     // Notice we DO NOT include 'mysql' here — we use AWS RDS instead!
-                    sh 'docker compose up -d --build service-registry config-server api-gateway admin-server auth-service room-service message-service media-service presence-service notification-service websocket-service payment-service redis kafka zipkin sonarqube'
+                    sh 'docker compose up -d --build service-registry api-gateway admin-server auth-service room-service message-service media-service presence-service notification-service websocket-service payment-service redis kafka zipkin'
                 }
             }
         }
