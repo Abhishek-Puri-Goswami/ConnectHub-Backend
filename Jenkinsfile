@@ -21,11 +21,9 @@ pipeline {
                 // Create the deployment folder if it doesn't exist
                 sh "mkdir -p ${DEPLOY_DIR}"
 
-                // Copy the docker-compose file and all microservice folders to the deployment folder
-                // Each microservice Dockerfile does a multi-stage Maven build inside Docker,
-                // so we do NOT need mvnw or Java installed on the Jenkins host.
-                sh "cp docker-compose.yml ${DEPLOY_DIR}/"
-                sh "cp -r admin-server api-gateway auth-service config-server media-service message-service notification-service payment-service presence-service room-service service-registry websocket-service ${DEPLOY_DIR}/"
+                // Copy the entire repository to the deployment folder
+                // The Dockerfiles require the root pom.xml and all module folders to build successfully.
+                sh "cp -a . ${DEPLOY_DIR}/"
 
                 dir("${DEPLOY_DIR}") {
                     // Copy the secret .env file we made earlier into this folder
