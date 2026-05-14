@@ -22,8 +22,9 @@ pipeline {
                 sh "mkdir -p ${DEPLOY_DIR}"
 
                 // Copy the entire repository to the deployment folder
-                // The Dockerfiles require the root pom.xml and all module folders to build successfully.
-                sh "cp -a . ${DEPLOY_DIR}/"
+                // We use rsync to explicitly exclude the .git folder, as git makes its files read-only 
+                // which causes permission denied errors on subsequent cp commands.
+                sh "rsync -a --delete --exclude='.git' ./ ${DEPLOY_DIR}/"
 
                 dir("${DEPLOY_DIR}") {
                     // Copy the secret .env file we made earlier into this folder
