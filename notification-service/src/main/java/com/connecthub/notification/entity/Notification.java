@@ -16,5 +16,6 @@ public class Notification {
     @Column(length = 36) private String roomId;
     @Column(length = 36) private String messageId;
     @Column(nullable = false) @Builder.Default private boolean isRead = false;
+    @Column(nullable = false) @Builder.Default private boolean emailSent = false;
     @CreationTimestamp @Column(updatable = false) private LocalDateTime createdAt;
 }
