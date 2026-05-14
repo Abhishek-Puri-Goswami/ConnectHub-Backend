@@ -41,6 +41,7 @@ import org.springframework.data.redis.listener.*;
 @Configuration
 public class RedisConfig {
     public static final String CHAT_CHANNEL         = "chat:messages";
+    public static final String BROADCAST_CHANNEL    = "chat:broadcast";
     public static final String PRESENCE_CHANNEL     = "chat:presence";
     public static final String EDIT_CHANNEL         = "chat:edits";
     public static final String DELETE_CHANNEL       = "chat:deletes";
@@ -61,6 +62,7 @@ public class RedisConfig {
         RedisMessageListenerContainer c = new RedisMessageListenerContainer();
         c.setConnectionFactory(factory);
         c.addMessageListener(sub, new ChannelTopic(CHAT_CHANNEL));
+        c.addMessageListener(sub, new ChannelTopic(BROADCAST_CHANNEL));
         c.addMessageListener(sub, new ChannelTopic(PRESENCE_CHANNEL));
         c.addMessageListener(sub, new ChannelTopic(EDIT_CHANNEL));
         c.addMessageListener(sub, new ChannelTopic(DELETE_CHANNEL));
