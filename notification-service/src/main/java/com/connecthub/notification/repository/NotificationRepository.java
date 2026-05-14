@@ -14,5 +14,12 @@ public interface NotificationRepository extends JpaRepository<Notification, Inte
     /** P2-17: Delete notifications older than the retention threshold */
     @Modifying @Query("DELETE FROM Notification n WHERE n.createdAt < :threshold")
     long deleteOlderThan(@Param("threshold") LocalDateTime threshold);
+
+    @Query("SELECT n FROM Notification n WHERE n.recipientId = :rid AND n.isRead = false AND n.emailSent = false AND n.createdAt < :threshold")
+    List<Notification> findDigestCandidates(@Param("rid") Integer rid, @Param("threshold") LocalDateTime threshold);
+
+    @Modifying
+    @Query("UPDATE Notification n SET n.emailSent = true WHERE n.recipientId = :rid AND n.isRead = false AND n.emailSent = false AND n.createdAt < :threshold")
+    void markEmailSent(@Param("rid") Integer rid, @Param("threshold") LocalDateTime threshold);
 }
 

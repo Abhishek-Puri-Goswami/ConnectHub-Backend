@@ -130,6 +130,15 @@ public class EmailSender implements MessageListener {
         sendHtml(to, "Welcome to ConnectHub " + plan + "! 🎉 Here's your receipt", htmlBody);
     }
 
+    @Async
+    public void sendMissedNotifications(String to, java.util.List<com.connecthub.notification.entity.Notification> pending) {
+        Context context = new Context();
+        context.setVariable("count", pending.size());
+        context.setVariable("frontendUrl", frontendUrl);
+        String htmlBody = templateEngine.process("missed-notifications-email", context);
+        sendHtml(to, "You have " + pending.size() + " missed notifications on ConnectHub", htmlBody);
+    }
+
     private void sendHtml(String to, String subject, String htmlBody) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
