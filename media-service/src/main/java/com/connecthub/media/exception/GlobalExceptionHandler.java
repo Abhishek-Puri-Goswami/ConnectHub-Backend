@@ -24,10 +24,22 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getMessage(), "status", 413));
     }
 
+    @ExceptionHandler(FileSizeLimitException.class)
+    public ResponseEntity<Map<String, Object>> handleFileSize(FileSizeLimitException ex) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(Map.of("error", ex.getMessage(), "status", 413));
+    }
+
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<Map<String, Object>> handleBadRequest(BadRequestException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", ex.getMessage(), "status", 400));
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handle(RuntimeException ex) {
         log.error("Unhandled exception caught: ", ex);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("error", ex.getMessage()));
     }
 }
