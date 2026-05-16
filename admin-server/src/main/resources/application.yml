@@ -1,4 +1,4 @@
-﻿server:
+server:
   port: 9090
 
 spring:
@@ -21,12 +21,13 @@ eureka:
     register-with-eureka: true
   instance:
     prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
 
 management:
   endpoints:
     web:
       exposure:
-        include: "*"
+        include: "health,info,metrics,loggers,env"
   endpoint:
     health:
       show-details: always

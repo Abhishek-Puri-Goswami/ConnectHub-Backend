@@ -22,7 +22,6 @@
         <dependency><groupId>org.springframework.kafka</groupId><artifactId>spring-kafka-test</artifactId><scope>test</scope></dependency>
         <dependency><groupId>org.springframework.cloud</groupId><artifactId>spring-cloud-starter-openfeign</artifactId></dependency>
         <dependency><groupId>org.springframework.cloud</groupId><artifactId>spring-cloud-starter-loadbalancer</artifactId></dependency>
-        <dependency><groupId>de.codecentric</groupId><artifactId>spring-boot-admin-starter-client</artifactId></dependency>
         <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-thymeleaf</artifactId><version>3.2.5</version></dependency>
         <!-- Twilio SMS SDK -->
         <dependency><groupId>com.twilio.sdk</groupId><artifactId>twilio</artifactId><version>10.1.5</version></dependency>

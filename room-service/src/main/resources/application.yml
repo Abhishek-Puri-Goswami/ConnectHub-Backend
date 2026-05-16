@@ -1,4 +1,4 @@
-﻿server:
+server:
   port: 8082
 spring:
   kafka:
@@ -27,6 +27,7 @@ eureka:
       defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka}@${EUREKA_HOST:localhost}:8761/eureka/
   instance:
     prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
 management:
   endpoints:
     web:
@@ -42,12 +43,6 @@ management:
     tracing:
       endpoint: ${ZIPKIN_URL:http://zipkin:9411}/api/v2/spans
 
-  boot:
-    admin:
-      client:
-        url: http://${ADMIN_SERVER_HOST:localhost}:9090
-        username: ${ADMIN_USER:admin}
-        password: ${ADMIN_PASSWORD:admin}
 
 springdoc:
   api-docs:
