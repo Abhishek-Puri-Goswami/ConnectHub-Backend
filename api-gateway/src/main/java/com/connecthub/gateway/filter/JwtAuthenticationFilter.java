@@ -90,6 +90,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/api/v1/auth/register", 
             "/api/v1/auth/login", 
             "/api/v1/auth/guest",
+            "/api/v1/auth/public/",       // public stats & unauthenticated endpoints
             "/api/v1/auth/verify-registration-otp", 
             "/api/v1/auth/resend-registration-otp",
             "/api/v1/auth/forgot-password", 
