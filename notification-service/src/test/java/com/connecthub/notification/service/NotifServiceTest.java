@@ -72,4 +72,34 @@ class NotifServiceTest {
         svc.delete(1);
         verify(repo).deleteById(1);
     }
+
+    @Test
+    void markRead_notFound_noOp() {
+        when(repo.findById(99)).thenReturn(Optional.empty());
+        svc.markRead(99);
+        verify(repo, never()).save(any());
+    }
+
+    @Test
+    void getByRecipient_empty_returnsEmptyList() {
+        when(repo.findByRecipientIdOrderByCreatedAtDesc(2)).thenReturn(List.of());
+        assertEquals(0, svc.getByRecipient(2).size());
+    }
+
+    @Test
+    void unreadCount_zero() {
+        when(repo.countByRecipientIdAndIsRead(2, false)).thenReturn(0);
+        assertEquals(0, svc.unreadCount(2));
+    }
+
+    @Test
+    void send_serializationFailure_swallowsException() throws Exception {
+        Notification n = new Notification();
+        when(repo.save(any())).thenReturn(n);
+        when(objectMapper.writeValueAsString(any()))
+                .thenThrow(new com.fasterxml.jackson.core.JsonProcessingException("") {});
+
+        // Should not propagate — the service swallows publish failures
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> svc.send(n));
+    }
 }

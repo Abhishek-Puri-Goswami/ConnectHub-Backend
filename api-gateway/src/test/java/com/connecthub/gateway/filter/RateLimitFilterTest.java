@@ -83,4 +83,82 @@ class RateLimitFilterTest {
     void filterOrder_isZero() {
         assertThat(rateLimitFilter.getOrder()).isEqualTo(0);
     }
+
+    // ── message / media skip-through ─────────────────────────────────────────
+
+    @Test
+    void messageEndpoint_skipsRateLimiting() {
+        // Message endpoints have their own tier-based rate limiters — gateway must skip
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/messages/room1")
+                .header("X-User-Id", "42").build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        rateLimitFilter.filter(exchange, chain).block();
+
+        verify(chain).filter(exchange);
+        // No Redis interaction — we short-circuit before the increment
+        verifyNoInteractions(redisTemplate);
+    }
+
+    @Test
+    void mediaEndpoint_skipsRateLimiting() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/media/upload")
+                .header("X-User-Id", "42").build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        rateLimitFilter.filter(exchange, chain).block();
+
+        verify(chain).filter(exchange);
+        verifyNoInteractions(redisTemplate);
+    }
+
+    // ── 429 response headers ─────────────────────────────────────────────────
+
+    @Test
+    void whenOverLimit_responseContainsRateLimitHeaders() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/rooms/list")
+                .header("X-User-Id", "42").build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.increment(anyString())).thenReturn(Mono.just(121L)); // over global limit
+
+        rateLimitFilter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getHeaders().getFirst("X-RateLimit-Action")).isEqualTo("global");
+        assertThat(exchange.getResponse().getHeaders().getFirst("X-RateLimit-Limit")).isEqualTo("120");
+        assertThat(exchange.getResponse().getHeaders().getFirst("X-RateLimit-Retry-After")).isEqualTo("60");
+    }
+
+    @Test
+    void otpEndpoint_over429_headersShowOtpActionAndLimit() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/auth/send-otp")
+                .header("X-User-Id", "10").build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.increment(anyString())).thenReturn(Mono.just(6L)); // over otp limit=5
+
+        rateLimitFilter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getHeaders().getFirst("X-RateLimit-Action")).isEqualTo("otp");
+        assertThat(exchange.getResponse().getHeaders().getFirst("X-RateLimit-Limit")).isEqualTo("5");
+    }
+
+    // ── first request in window: TTL set ─────────────────────────────────────
+
+    @Test
+    void firstRequestInWindow_setsTtlOnRedisKey() {
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/rooms/list")
+                .header("X-User-Id", "42").build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.increment(anyString())).thenReturn(Mono.just(1L)); // first request
+        when(redisTemplate.expire(anyString(), any())).thenReturn(Mono.just(Boolean.TRUE));
+        when(chain.filter(any())).thenReturn(Mono.empty());
+
+        rateLimitFilter.filter(exchange, chain).block();
+
+        verify(redisTemplate).expire(anyString(), any());
+    }
 }

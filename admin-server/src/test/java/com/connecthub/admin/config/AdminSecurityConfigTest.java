@@ -55,4 +55,24 @@ class AdminSecurityConfigTest {
         mockMvc.perform(get("/login"))
                .andExpect(status().isOk());
     }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void authenticated_accessToApplications_shouldBeOk() throws Exception {
+        mockMvc.perform(get("/applications"))
+               .andExpect(status().isOk());
+    }
+
+    @Test
+    void unauthenticated_actuatorInfo_shouldBePermitted() throws Exception {
+        mockMvc.perform(get("/actuator/info"))
+               .andExpect(status().isOk());
+    }
+
+    @Test
+    void unauthenticated_actuatorEnv_shouldReturn401() throws Exception {
+        // Sensitive actuator endpoints must be protected
+        mockMvc.perform(get("/actuator/env"))
+               .andExpect(status().isUnauthorized());
+    }
 }

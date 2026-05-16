@@ -108,4 +108,103 @@ class SubscriptionServiceTest {
         svc.handleWebhookEvent("subscription.activated", new JSONObject());
         verifyNoInteractions(subscriptionRepo, paymentRepo, kafkaTemplate);
     }
+
+    // ── expireOverdueSubscriptions ────────────────────────────────────────────
+
+    @Test
+    void expireOverdueSubscriptions_noOverdue_doesNothing() {
+        when(subscriptionRepo.findAllByStatusAndEndDateBefore(eq("ACTIVE"), any()))
+                .thenReturn(List.of());
+        svc.expireOverdueSubscriptions();
+        verify(subscriptionRepo, never()).save(any());
+        verifyNoInteractions(kafkaTemplate);
+    }
+
+    @Test
+    void expireOverdueSubscriptions_expiresAndPublishesKafka() {
+        Subscription sub = Subscription.builder()
+                .id(1L).userId(42).plan("PRO").status("ACTIVE").build();
+        when(subscriptionRepo.findAllByStatusAndEndDateBefore(eq("ACTIVE"), any()))
+                .thenReturn(List.of(sub));
+
+        svc.expireOverdueSubscriptions();
+
+        assertEquals("EXPIRED", sub.getStatus());
+        verify(subscriptionRepo).save(sub);
+        verify(kafkaTemplate).send(eq("user.subscription.status"), eq("42"), anyString());
+    }
+
+    // ── getSubscription ───────────────────────────────────────────────────────
+
+    @Test
+    void getSubscription_present_returnsResponse() {
+        Subscription sub = Subscription.builder()
+                .id(1L).userId(1).plan("PRO").status("ACTIVE").build();
+        when(subscriptionRepo.findByUserId(1)).thenReturn(Optional.of(sub));
+
+        var result = svc.getSubscription(1);
+
+        assertTrue(result.isPresent());
+        assertEquals("PRO", result.get().getPlan());
+    }
+
+    @Test
+    void getSubscription_absent_returnsEmpty() {
+        when(subscriptionRepo.findByUserId(99)).thenReturn(Optional.empty());
+        assertTrue(svc.getSubscription(99).isEmpty());
+    }
+
+    // ── getPaymentHistory ─────────────────────────────────────────────────────
+
+    @Test
+    void getPaymentHistory_noSubscription_returnsEmptyList() {
+        when(subscriptionRepo.findByUserId(99)).thenReturn(Optional.empty());
+        assertTrue(svc.getPaymentHistory(99).isEmpty());
+    }
+
+    @Test
+    void getPaymentHistory_withSubscription_returnsMappedPayments() {
+        Subscription sub = Subscription.builder().id(5L).userId(1).build();
+        com.connecthub.payment.entity.Payment pay = com.connecthub.payment.entity.Payment.builder()
+                .id(10L).subscriptionId(5L).razorpayPaymentId("pay_1")
+                .status("CAPTURED").currency("INR")
+                .amount(java.math.BigDecimal.valueOf(99)).build();
+        when(subscriptionRepo.findByUserId(1)).thenReturn(Optional.of(sub));
+        when(paymentRepo.findBySubscriptionIdOrderByCreatedAtDesc(5L)).thenReturn(List.of(pay));
+
+        var result = svc.getPaymentHistory(1);
+
+        assertEquals(1, result.size());
+        assertEquals("pay_1", result.get(0).getRazorpayPaymentId());
+    }
+
+    // ── getConfig ─────────────────────────────────────────────────────────────
+
+    @Test
+    void getConfig_returnsKeyAndAmount() {
+        var config = svc.getConfig();
+        assertEquals("test_key", config.get("razorpayKeyId"));
+        assertEquals(9900L, config.get("amountPaise"));
+    }
+
+    // ── createOrder — expired plan branch ────────────────────────────────────
+
+    @Test
+    void createOrder_expiredSubscription_createsNewOrder() throws Exception {
+        // A subscription that is ACTIVE but past its endDate → treated as expired
+        Subscription expired = Subscription.builder()
+                .id(1L).userId(1).plan("PRO").status("ACTIVE")
+                .endDate(java.time.LocalDateTime.now().minusDays(1)).build();
+        when(subscriptionRepo.findByUserId(1)).thenReturn(Optional.of(expired));
+
+        com.razorpay.Order rzpOrder = mock(com.razorpay.Order.class);
+        when(rzpOrder.get("id")).thenReturn("order_new");
+        when(razorpayClient.orders.create(any(JSONObject.class))).thenReturn(rzpOrder);
+        when(subscriptionRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        SubscriptionResponse res = svc.createOrder(1, "test@test.com");
+
+        assertEquals("PENDING", res.getStatus());
+        verify(subscriptionRepo).save(any());
+    }
 }
