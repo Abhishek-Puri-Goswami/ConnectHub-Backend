@@ -52,6 +52,7 @@ services:
       retries: 5
 
   service-registry:
+    image: ghcr.io/abhishek-puri-goswami/connecthub-backend/service-registry:latest
     build:
       context: .
       dockerfile: service-registry/Dockerfile
@@ -72,6 +73,7 @@ services:
 
   # ── Spring Boot Admin ─────────────────────────────────────────────────────────
   admin-server:
+    image: ghcr.io/abhishek-puri-goswami/connecthub-backend/admin-server:latest
     build:
       context: .
       dockerfile: admin-server/Dockerfile
@@ -93,6 +95,7 @@ services:
       retries: 5
 
   api-gateway:
+    image: ghcr.io/abhishek-puri-goswami/connecthub-backend/api-gateway:latest
     build:
       context: .
       dockerfile: api-gateway/Dockerfile
@@ -118,6 +121,7 @@ services:
     networks: [connecthub]
 
   auth-service:
+    image: ghcr.io/abhishek-puri-goswami/connecthub-backend/auth-service:latest
     build:
       context: .
       dockerfile: auth-service/Dockerfile
@@ -153,6 +157,7 @@ services:
     networks: [connecthub]
 
   room-service:
+    image: ghcr.io/abhishek-puri-goswami/connecthub-backend/room-service:latest
     build:
       context: .
       dockerfile: room-service/Dockerfile
@@ -179,6 +184,7 @@ services:
     networks: [connecthub]
 
   message-service:
+    image: ghcr.io/abhishek-puri-goswami/connecthub-backend/message-service:latest
     build:
       context: .
       dockerfile: message-service/Dockerfile
@@ -205,6 +211,7 @@ services:
     networks: [connecthub]
 
   media-service:
+    image: ghcr.io/abhishek-puri-goswami/connecthub-backend/media-service:latest
     build:
       context: .
       dockerfile: media-service/Dockerfile
@@ -234,6 +241,7 @@ services:
     networks: [connecthub]
 
   presence-service:
+    image: ghcr.io/abhishek-puri-goswami/connecthub-backend/presence-service:latest
     build:
       context: .
       dockerfile: presence-service/Dockerfile
@@ -254,6 +262,7 @@ services:
     networks: [connecthub]
 
   notification-service:
+    image: ghcr.io/abhishek-puri-goswami/connecthub-backend/notification-service:latest
     build:
       context: .
       dockerfile: notification-service/Dockerfile
@@ -287,6 +296,7 @@ services:
     networks: [connecthub]
 
   websocket-service:
+    image: ghcr.io/abhishek-puri-goswami/connecthub-backend/websocket-service:latest
     build:
       context: .
       dockerfile: websocket-service/Dockerfile
@@ -310,6 +320,7 @@ services:
     networks: [connecthub]
 
   payment-service:
+    image: ghcr.io/abhishek-puri-goswami/connecthub-backend/payment-service:latest
     build:
       context: .
       dockerfile: payment-service/Dockerfile
