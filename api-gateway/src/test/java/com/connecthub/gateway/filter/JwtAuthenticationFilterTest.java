@@ -36,7 +36,13 @@ class JwtAuthenticationFilterTest {
         ReactiveStringRedisTemplate redisTemplate = mock(ReactiveStringRedisTemplate.class);
         ReactiveValueOperations<String, String> ops = mock(ReactiveValueOperations.class);
         when(redisTemplate.opsForValue()).thenReturn(ops);
+
+        // opsForValue().get() — used for tier override lookup ("sub:tier:{userId}")
         when(ops.get(anyString())).thenReturn(Mono.empty());
+
+        // hasKey() — used for jti blacklist, user-invalidated, and user-suspended checks.
+        // Must return Mono<Boolean> (not null) so Mono.zip() can complete.
+        when(redisTemplate.hasKey(anyString())).thenReturn(Mono.just(false));
 
         filter = new JwtAuthenticationFilter(redisTemplate);
         ReflectionTestUtils.setField(filter, "jwtSecret", rawSecret);
