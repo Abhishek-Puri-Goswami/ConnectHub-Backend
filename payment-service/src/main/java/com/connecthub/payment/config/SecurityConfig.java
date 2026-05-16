@@ -31,7 +31,7 @@ public class SecurityConfig {
                 // Webhook is public — signature is verified internally by WebhookController
                 .requestMatchers("/api/v1/payments/webhook").permitAll()
                 // Actuator health is always public
-                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                .requestMatchers("/actuator/**").permitAll()
                 // Swagger
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 // Everything else requires authentication via gateway-injected header
