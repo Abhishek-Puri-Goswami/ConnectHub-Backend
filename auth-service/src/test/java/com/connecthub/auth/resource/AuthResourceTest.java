@@ -19,6 +19,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,8 +41,9 @@ class AuthResourceTest {
 
     @BeforeEach
     void setUp() {
-        when(ipRateLimiter.tryAcquireOtp(any())).thenReturn(true);
-        when(ipRateLimiter.tryAcquireForgotPassword(any())).thenReturn(true);
+        // lenient: only some tests exercise OTP / forgot-password rate-limiter paths
+        lenient().when(ipRateLimiter.tryAcquireOtp(any())).thenReturn(true);
+        lenient().when(ipRateLimiter.tryAcquireForgotPassword(any())).thenReturn(true);
     }
     
     private AuthResponse dummyAuth() {
