@@ -111,8 +111,8 @@ services:
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      FRONTEND_URL: ${FRONTEND_URL:-http://connecthub-app.duckdns.org:5173}
-      APP_CORS_ALLOWED_ORIGIN: "http://connecthub-app.duckdns.org:5173"
+      FRONTEND_URL: ${FRONTEND_URL:-https://connecthub-de66f.firebaseapp.com}
+      APP_CORS_ALLOWED_ORIGIN: "https://connecthub-de66f.firebaseapp.com"
       ZIPKIN_URL: ${ZIPKIN_URL:-http://zipkin:9411}
     depends_on:
       service-registry: { condition: service_healthy }
@@ -140,8 +140,8 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
-      FRONTEND_URL: ${FRONTEND_URL:-http://connecthub-app.duckdns.org:5173}
-      APP_CORS_ALLOWED_ORIGIN: "http://connecthub-app.duckdns.org:5173"
+      FRONTEND_URL: ${FRONTEND_URL:-https://connecthub-de66f.firebaseapp.com}
+      APP_CORS_ALLOWED_ORIGIN: "https://connecthub-de66f.firebaseapp.com"
       KAFKA_BROKERS: kafka:9092
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
