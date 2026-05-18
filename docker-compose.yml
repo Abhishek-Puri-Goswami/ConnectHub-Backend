@@ -341,6 +341,7 @@ services:
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
       MANAGEMENT_ZIPKIN_TRACING_ENABLED: "false"
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: "false"
     depends_on:
       kafka: { condition: service_healthy }
       redis: { condition: service_healthy }
