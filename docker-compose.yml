@@ -1,22 +1,4 @@
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: connecthub-mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    ports: ["3307:3306"]
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./init-databases.sh:/docker-entrypoint-initdb.d/init.sh
-    networks: [connecthub]
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   kafka:
     image: apache/kafka:3.7.0
     container_name: connecthub-kafka
@@ -31,6 +13,7 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_HEAP_OPTS: "-Xmx256m -Xms128m"
     networks: [connecthub]
     healthcheck:
       test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9092"]
@@ -61,9 +44,6 @@ services:
     environment:
       EUREKA_USER: ${EUREKA_USER:-eureka}
       EUREKA_PASSWORD: ${EUREKA_PASSWORD}
-      ADMIN_SERVER_HOST: admin-server
-      ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
     networks: [connecthub]
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8761/actuator/health"]
@@ -101,29 +81,6 @@ services:
       retries: 8
       start_period: 30s
 
-  # ── Spring Boot Admin ─────────────────────────────────────────────────────────
-  admin-server:
-    image: ghcr.io/abhishek-puri-goswami/connecthub-backend/admin-server:latest
-    build:
-      context: .
-      dockerfile: admin-server/Dockerfile
-    container_name: connecthub-admin
-    ports: ["19090:9090"]
-    environment:
-      EUREKA_HOST: service-registry
-      EUREKA_USER: ${EUREKA_USER:-eureka}
-      EUREKA_PASSWORD: ${EUREKA_PASSWORD}
-      ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-    depends_on:
-      service-registry: { condition: service_healthy }
-    networks: [connecthub]
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:9090/actuator/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-
   api-gateway:
     image: ghcr.io/abhishek-puri-goswami/connecthub-backend/api-gateway:latest
     build:
@@ -138,19 +95,14 @@ services:
       REDIS_HOST: redis
       JWT_SECRET: ${JWT_SECRET}
       KAFKA_BROKERS: kafka:9092
-      ADMIN_SERVER_HOST: admin-server
-      ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       FRONTEND_URL: ${FRONTEND_URL:-https://connecthub-de66f.firebaseapp.com}
       APP_CORS_ALLOWED_ORIGIN: ${FRONTEND_URL:-https://connecthub-de66f.firebaseapp.com}
-      ZIPKIN_URL: ${ZIPKIN_URL:-http://zipkin:9411}
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
-      service-registry: { condition: service_healthy }
-      admin-server: { condition: service_healthy }
       redis: { condition: service_healthy }
+      service-registry: { condition: service_healthy }
       config-server: { condition: service_healthy }
     restart: on-failure
     networks: [connecthub]
@@ -163,7 +115,7 @@ services:
     container_name: connecthub-auth
     expose: ["8081"]
     environment:
-      MYSQL_HOST: mysql
+      MYSQL_HOST: ${DB_HOST_OVERRIDE:-mysql}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       REDIS_HOST: redis
@@ -178,9 +130,6 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-https://connecthub-de66f.firebaseapp.com}
       APP_CORS_ALLOWED_ORIGIN: ${FRONTEND_URL:-https://connecthub-de66f.firebaseapp.com}
       KAFKA_BROKERS: kafka:9092
-      ADMIN_SERVER_HOST: admin-server
-      ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       PLATFORM_ADMIN_EMAIL: ${PLATFORM_ADMIN_EMAIL}
       PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD}
       CONFIG_SERVER_HOST: config-server
@@ -188,10 +137,8 @@ services:
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
-      mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
-      admin-server: { condition: service_healthy }
       config-server: { condition: service_healthy }
     restart: on-failure
     networks: [connecthub]
@@ -204,7 +151,7 @@ services:
     container_name: connecthub-room
     expose: ["8082"]
     environment:
-      MYSQL_HOST: mysql
+      MYSQL_HOST: ${DB_HOST_OVERRIDE:-mysql}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       EUREKA_HOST: service-registry
@@ -212,18 +159,13 @@ services:
       EUREKA_PASSWORD: ${EUREKA_PASSWORD}
       REDIS_HOST: redis
       KAFKA_BROKERS: kafka:9092
-      ADMIN_SERVER_HOST: admin-server
-      ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
-      mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
-      admin-server: { condition: service_healthy }
       config-server: { condition: service_healthy }
     restart: on-failure
     networks: [connecthub]
@@ -236,7 +178,7 @@ services:
     container_name: connecthub-message
     expose: ["8083"]
     environment:
-      MYSQL_HOST: mysql
+      MYSQL_HOST: ${DB_HOST_OVERRIDE:-mysql}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       EUREKA_HOST: service-registry
@@ -244,18 +186,13 @@ services:
       EUREKA_PASSWORD: ${EUREKA_PASSWORD}
       REDIS_HOST: redis
       KAFKA_BROKERS: kafka:9092
-      ADMIN_SERVER_HOST: admin-server
-      ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
-      mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
-      admin-server: { condition: service_healthy }
       config-server: { condition: service_healthy }
     restart: on-failure
     networks: [connecthub]
@@ -268,7 +205,7 @@ services:
     container_name: connecthub-media
     expose: ["8084"]
     environment:
-      MYSQL_HOST: mysql
+      MYSQL_HOST: ${DB_HOST_OVERRIDE:-mysql}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       REDIS_HOST: redis
@@ -280,17 +217,12 @@ services:
       AWS_S3_BUCKET: ${AWS_S3_BUCKET:-connecthub-media-bucket}
       AWS_REGION: ${AWS_REGION:-ap-south-1}
       KAFKA_BROKERS: kafka:9092
-      ADMIN_SERVER_HOST: admin-server
-      ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
-      mysql: { condition: service_healthy }
       service-registry: { condition: service_healthy }
-      admin-server: { condition: service_healthy }
       config-server: { condition: service_healthy }
     restart: on-failure
     networks: [connecthub]
@@ -307,16 +239,12 @@ services:
       EUREKA_HOST: service-registry
       EUREKA_USER: ${EUREKA_USER:-eureka}
       EUREKA_PASSWORD: ${EUREKA_PASSWORD}
-      ADMIN_SERVER_HOST: admin-server
-      ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
-      admin-server: { condition: service_healthy }
       config-server: { condition: service_healthy }
     restart: on-failure
     networks: [connecthub]
@@ -329,7 +257,7 @@ services:
     container_name: connecthub-notification
     expose: ["8086"]
     environment:
-      MYSQL_HOST: mysql
+      MYSQL_HOST: ${DB_HOST_OVERRIDE:-mysql}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       REDIS_HOST: redis
@@ -341,9 +269,6 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       KAFKA_BROKERS: kafka:9092
-      ADMIN_SERVER_HOST: admin-server
-      ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
       TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
@@ -353,10 +278,8 @@ services:
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
-      mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
-      admin-server: { condition: service_healthy }
       config-server: { condition: service_healthy }
     restart: on-failure
     networks: [connecthub]
@@ -375,9 +298,6 @@ services:
       EUREKA_PASSWORD: ${EUREKA_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       KAFKA_BROKERS: kafka:9092
-      ADMIN_SERVER_HOST: admin-server
-      ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
@@ -385,7 +305,6 @@ services:
       kafka: { condition: service_healthy }
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
-      admin-server: { condition: service_healthy }
       config-server: { condition: service_healthy }
     restart: on-failure
     networks: [connecthub]
@@ -398,7 +317,7 @@ services:
     container_name: connecthub-payment
     expose: ["8088"]
     environment:
-      MYSQL_HOST: mysql
+      MYSQL_HOST: ${DB_HOST_OVERRIDE:-mysql}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       REDIS_HOST: redis
@@ -410,35 +329,18 @@ services:
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
       RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET}
-      ADMIN_SERVER_HOST: admin-server
-      ADMIN_USER: ${ADMIN_USER:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
-      mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
-      admin-server: { condition: service_healthy }
       config-server: { condition: service_healthy }
     restart: on-failure
     networks: [connecthub]
 
-  zipkin:
-    image: openzipkin/zipkin:latest
-    container_name: connecthub-zipkin
-    ports: ["9411:9411"]
-    networks: [connecthub]
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:9411/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
 volumes:
-  mysql_data:
   redis_data:
 
 networks:
