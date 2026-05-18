@@ -186,6 +186,13 @@ public class DeliveryService {
             try {
                 ChatMessagePayload msg = mapper.readValue(json, ChatMessagePayload.class);
                 messaging.convertAndSendToUser(userId, "/queue/messages", msg);
+                /*
+                 * Send a delivery ack back to the original sender for each flushed message.
+                 * Without this, pending messages delivered on reconnect would never transition
+                 * the sender's tick from SENT → DELIVERED, since the normal isUserOnline()
+                 * path was false when the message was originally processed.
+                 */
+                sendDeliveryAck(msg);
                 flushed++;
             } catch (Exception e) {
                 log.error("Failed to deserialize pending message for user {}", userId, e);
