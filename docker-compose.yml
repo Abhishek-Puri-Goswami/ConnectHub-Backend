@@ -218,7 +218,6 @@ services:
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
-    restart: on-failure
     depends_on:
       kafka: { condition: service_healthy }
       mysql: { condition: service_healthy }
