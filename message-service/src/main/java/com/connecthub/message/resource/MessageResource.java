@@ -21,7 +21,13 @@ public class MessageResource {
 
 	@PostMapping
 	public ResponseEntity<Message> send(@RequestBody Message msg,
+			@RequestHeader(value = "X-User-Id", required = false) String userId,
 			@RequestHeader(value = "X-Subscription-Tier", required = false) String subscriptionTier) {
+		// Always override senderId from the gateway-injected header — prevents spoofing
+		if (userId != null && !userId.isBlank()) {
+			try { msg.setSenderId(Integer.parseInt(userId)); }
+			catch (NumberFormatException ignored) { /* leave whatever is in the body */ }
+		}
 		return ResponseEntity.status(HttpStatus.CREATED)
 				.body(svc.send(msg, SubscriptionTierLimits.normalizeTier(subscriptionTier)));
 	}
