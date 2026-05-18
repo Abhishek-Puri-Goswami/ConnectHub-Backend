@@ -37,4 +37,3 @@ replay_pid*.log
 **/.settings/
 .factorypath
 **/.factorypath
-.claude/
