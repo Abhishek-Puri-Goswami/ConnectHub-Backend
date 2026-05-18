@@ -8,6 +8,11 @@ spring:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/connecthub_media?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
     username: ${MYSQL_USER}
     password: ${MYSQL_PASSWORD}
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
   jpa:
     hibernate:
       ddl-auto: validate
