@@ -12,13 +12,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ── Checkout ────────────────────────────────────────────────────────────
       - name: Checkout source
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0          # Full history required for SonarCloud blame
+          fetch-depth: 0
 
-      # ── Java ────────────────────────────────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -26,7 +24,6 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      # ── Cache SonarCloud packages ────────────────────────────────────────────
       - name: Cache SonarCloud packages
         uses: actions/cache@v4
         with:
@@ -34,42 +31,19 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
-      # ── Build, Test, Coverage & SonarCloud Scan — single Maven invocation ───
-      #
-      # WHY ONE INVOCATION?
-      #   Running "mvn verify" then "mvn sonar:sonar" as two separate commands
-      #   requires passing an explicit path for the JaCoCo aggregate XML. Using a
-      #   relative path (-Dsonar.coverage.jacoco.xmlReportPaths=code-coverage-report/...)
-      #   fails silently because SonarCloud resolves it relative to *each child module*
-      #   directory, where the file does not exist.
-      #
-      #   A single "mvn verify sonar:sonar" call avoids the problem entirely:
-      #   - "verify" compiles, runs all tests, and triggers jacoco:report-aggregate
-      #     (bound to the code-coverage-report module's verify phase), producing
-      #     code-coverage-report/target/site/jacoco-aggregate/jacoco.xml
-      #   - "sonar:sonar" then runs in the same Maven session, so
-      #     ${maven.multiModuleProjectDirectory} in pom.xml resolves to the absolute
-      #     repo root and SonarCloud finds the aggregate report immediately.
-      #
-      # CPD EXCLUSIONS:
-      #   sonar.cpd.exclusions is set in pom.xml to skip *Test.java files. Test code
-      #   has inherently repetitive mock/assertion patterns that are false positives.
-      #
-      - name: Build, Test & SonarCloud Scan
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      # Step 1: Run full verify lifecycle for all modules in reactor order.
+      # The code-coverage-report module (last in the reactor) runs jacoco:report-aggregate
+      # and produces code-coverage-report/target/site/jacoco-aggregate/jacoco.xml.
+      # This file must exist BEFORE sonar:sonar runs — if both goals are in a single
+      # "mvn verify sonar:sonar" command, sonar:sonar executes per-module during the
+      # reactor pass, so auth-service is analyzed before code-coverage-report has run
+      # and the aggregate XML doesn't exist yet. Two steps avoids that ordering problem.
+      - name: Build and run tests with JaCoCo coverage
         run: |
-          mvn -B verify sonar:sonar \
+          mvn -B verify \
             -Djacoco.skip.check=true \
-            -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
-            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY_BACKEND }} \
-            -Dsonar.projectName="ConnectHub Backend" \
-            -Dsonar.token=${{ secrets.SONAR_TOKEN }} \
             --no-transfer-progress
 
-      # ── Upload JaCoCo coverage report as artifact ────────────────────────────
       - name: Upload JaCoCo aggregate report
         uses: actions/upload-artifact@v4
         if: always()
@@ -77,3 +51,21 @@ jobs:
           name: jacoco-coverage-report
           path: code-coverage-report/target/site/jacoco-aggregate/
           retention-days: 7
+
+      # Step 2: Run SonarCloud scan pointing at the now-complete aggregate XML.
+      # $(pwd) gives the absolute runner path so SonarCloud resolves the file
+      # correctly for every sub-module (relative paths fail per-module resolution).
+      - name: SonarCloud Scan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          mvn -B sonar:sonar \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY_BACKEND }} \
+            -Dsonar.projectName="ConnectHub Backend" \
+            -Dsonar.token=${{ secrets.SONAR_TOKEN }} \
+            -Dsonar.coverage.jacoco.xmlReportPaths=$(pwd)/code-coverage-report/target/site/jacoco-aggregate/jacoco.xml \
+            -Dsonar.cpd.exclusions="**/*Test.java,**/*Tests.java,**/*IT.java" \
+            --no-transfer-progress
