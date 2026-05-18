@@ -65,8 +65,9 @@ class MessageServiceTest {
 
     @Test
     void getMessages_withoutCursor_callsFirstPageQuery() {
+        // Service uses findByRoomIdOrderBySentAtDesc (includes deleted so frontend can show placeholders)
         List<Message> msgs = List.of(Message.builder().messageId("m1").build());
-        when(msgRepo.findByRoomIdAndIsDeletedFalseOrderBySentAtDesc(eq("r1"), any(Pageable.class)))
+        when(msgRepo.findByRoomIdOrderBySentAtDesc(eq("r1"), any(Pageable.class)))
             .thenReturn(msgs);
 
         List<Message> result = svc.getMessages("r1", null, 50);
@@ -77,7 +78,7 @@ class MessageServiceTest {
     void getMessages_withCursor_callsCursorQuery() {
         LocalDateTime cursor = LocalDateTime.now().minusHours(1);
         List<Message> msgs = List.of(Message.builder().messageId("m2").build());
-        when(msgRepo.findByRoomIdAndIsDeletedFalseAndSentAtBeforeOrderBySentAtDesc(eq("r1"), eq(cursor), any(Pageable.class)))
+        when(msgRepo.findByRoomIdAndSentAtBeforeOrderBySentAtDesc(eq("r1"), eq(cursor), any(Pageable.class)))
             .thenReturn(msgs);
 
         List<Message> result = svc.getMessages("r1", cursor, 50);
