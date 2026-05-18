@@ -35,6 +35,14 @@
         <sonar.coverage.exclusions>
             **/dto/**,**/config/**,**/exception/**,**/entity/**,**/model/**,**/*Application.java
         </sonar.coverage.exclusions>
+        <!--
+          Exclude test sources from SonarCloud CPD (copy-paste detection).
+          Test files legitimately repeat mocking/assertion patterns across many files;
+          flagging that as "duplication" is a false positive that inflates the metric.
+        -->
+        <sonar.cpd.exclusions>
+            **/*Test.java,**/*Tests.java,**/*IT.java
+        </sonar.cpd.exclusions>
         <!-- Pass token via CLI: -Dsonar.token=<your-token>  (SonarQube 10.x removed user/password auth) -->
         <sonar.token></sonar.token>
         <!-- JaCoCo minimum line coverage (override via -Djacoco.minimum.coverage=0.xx) -->
