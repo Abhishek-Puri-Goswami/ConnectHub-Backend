@@ -71,6 +71,36 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Spring Cloud Config Server ───────────────────────────────────────────────
+  config-server:
+    image: ghcr.io/abhishek-puri-goswami/connecthub-backend/config-server:latest
+    build:
+      context: .
+      dockerfile: config-server/Dockerfile
+    container_name: connecthub-config
+    expose: ["8888"]
+    environment:
+      EUREKA_HOST: service-registry
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD}
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
+      CONFIG_REPO_URI: ${CONFIG_REPO_URI:-https://github.com/Abhishek-Puri-Goswami/ConnectHub-Config-Server.git}
+      CONFIG_REPO_USERNAME: ${CONFIG_REPO_USERNAME:-}
+      CONFIG_REPO_PASSWORD: ${CONFIG_REPO_PASSWORD:-}
+    depends_on:
+      service-registry: { condition: service_healthy }
+    restart: on-failure
+    networks: [connecthub]
+    healthcheck:
+      # wget --server-response prints the HTTP status line to stderr; redirect to stdout
+      # and check for any valid HTTP response — even a 401 means the server is up.
+      test: ["CMD-SHELL", "wget --server-response --quiet http://localhost:8888/actuator/health 2>&1 | head -1 | grep -q 'HTTP/'"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+
   # ── Spring Boot Admin ─────────────────────────────────────────────────────────
   admin-server:
     image: ghcr.io/abhishek-puri-goswami/connecthub-backend/admin-server:latest
@@ -112,12 +142,17 @@ services:
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       FRONTEND_URL: ${FRONTEND_URL:-https://connecthub-de66f.firebaseapp.com}
-      APP_CORS_ALLOWED_ORIGIN: "https://connecthub-de66f.firebaseapp.com"
+      APP_CORS_ALLOWED_ORIGIN: ${FRONTEND_URL:-https://connecthub-de66f.firebaseapp.com}
       ZIPKIN_URL: ${ZIPKIN_URL:-http://zipkin:9411}
+      CONFIG_SERVER_HOST: config-server
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       service-registry: { condition: service_healthy }
       admin-server: { condition: service_healthy }
       redis: { condition: service_healthy }
+      config-server: { condition: service_healthy }
+    restart: on-failure
     networks: [connecthub]
 
   auth-service:
@@ -141,19 +176,24 @@ services:
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       FRONTEND_URL: ${FRONTEND_URL:-https://connecthub-de66f.firebaseapp.com}
-      APP_CORS_ALLOWED_ORIGIN: "https://connecthub-de66f.firebaseapp.com"
+      APP_CORS_ALLOWED_ORIGIN: ${FRONTEND_URL:-https://connecthub-de66f.firebaseapp.com}
       KAFKA_BROKERS: kafka:9092
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       PLATFORM_ADMIN_EMAIL: ${PLATFORM_ADMIN_EMAIL}
       PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD}
+      CONFIG_SERVER_HOST: config-server
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
       admin-server: { condition: service_healthy }
+      config-server: { condition: service_healthy }
+    restart: on-failure
     networks: [connecthub]
 
   room-service:
@@ -175,12 +215,18 @@ services:
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      CONFIG_SERVER_HOST: config-server
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
+    restart: on-failure
     depends_on:
       kafka: { condition: service_healthy }
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
       admin-server: { condition: service_healthy }
+      config-server: { condition: service_healthy }
+    restart: on-failure
     networks: [connecthub]
 
   message-service:
@@ -202,12 +248,17 @@ services:
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      CONFIG_SERVER_HOST: config-server
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
       admin-server: { condition: service_healthy }
+      config-server: { condition: service_healthy }
+    restart: on-failure
     networks: [connecthub]
 
   media-service:
@@ -233,11 +284,16 @@ services:
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      CONFIG_SERVER_HOST: config-server
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
       mysql: { condition: service_healthy }
       service-registry: { condition: service_healthy }
       admin-server: { condition: service_healthy }
+      config-server: { condition: service_healthy }
+    restart: on-failure
     networks: [connecthub]
 
   presence-service:
@@ -255,10 +311,15 @@ services:
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      CONFIG_SERVER_HOST: config-server
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
       admin-server: { condition: service_healthy }
+      config-server: { condition: service_healthy }
+    restart: on-failure
     networks: [connecthub]
 
   notification-service:
@@ -287,12 +348,18 @@ services:
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
       TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+      CONFIG_SERVER_HOST: config-server
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
       admin-server: { condition: service_healthy }
+      config-server: { condition: service_healthy }
+    restart: on-failure
     networks: [connecthub]
 
   websocket-service:
@@ -312,11 +379,16 @@ services:
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      CONFIG_SERVER_HOST: config-server
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
       admin-server: { condition: service_healthy }
+      config-server: { condition: service_healthy }
+    restart: on-failure
     networks: [connecthub]
 
   payment-service:
@@ -342,12 +414,17 @@ services:
       ADMIN_SERVER_HOST: admin-server
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      CONFIG_SERVER_HOST: config-server
+      CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
+      CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
     depends_on:
       kafka: { condition: service_healthy }
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
       admin-server: { condition: service_healthy }
+      config-server: { condition: service_healthy }
+    restart: on-failure
     networks: [connecthub]
 
   zipkin:

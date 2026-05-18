@@ -3,11 +3,14 @@ package com.connecthub.auth.listener;
 import com.connecthub.auth.entity.User;
 import com.connecthub.auth.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -22,8 +25,18 @@ class KafkaSubscriptionListenerTest {
     @Mock UserRepository userRepository;
     @Mock ObjectMapper objectMapper;
     @Mock com.connecthub.auth.service.UserProfileCacheService profileCache;
+    @Mock StringRedisTemplate redis;
 
     @InjectMocks KafkaSubscriptionListener listener;
+
+    @BeforeEach
+    @SuppressWarnings("unchecked")
+    void setUp() {
+        // The listener calls redis.opsForValue().set() to cache the new tier in Redis.
+        // lenient: only processSubscriptionStatus_updatesUserTier exercises this path.
+        ValueOperations<String, String> ops = mock(ValueOperations.class);
+        lenient().when(redis.opsForValue()).thenReturn(ops);
+    }
 
     @Test
     void processSubscriptionStatus_updatesUserTier() throws Exception {
