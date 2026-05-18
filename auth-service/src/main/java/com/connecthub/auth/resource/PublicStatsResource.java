@@ -3,6 +3,7 @@ package com.connecthub.auth.resource;
 import com.connecthub.auth.client.MessageClient;
 import com.connecthub.auth.client.PresenceClient;
 import com.connecthub.auth.client.RoomClient;
+import com.connecthub.auth.repository.UserRepository;
 import com.connecthub.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -10,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.LinkedHashMap;
@@ -32,9 +34,31 @@ import java.util.Map;
 public class PublicStatsResource {
 
     private final AuthService authService;
+    private final UserRepository userRepository;
     private final PresenceClient presenceClient;
     private final RoomClient roomClient;
     private final MessageClient messageClient;
+
+    /**
+     * GET /api/v1/auth/public/verification-status?email=...
+     * Returns whether the email and phone are verified for a given email address.
+     * Used by the registration verification page to pre-populate verified state
+     * (e.g. if the user navigates back after already verifying one or both).
+     * No auth required — the gateway's OPEN_ENDPOINTS list includes /api/v1/auth/public/.
+     */
+    @Operation(summary = "Check email/phone verification status (no auth required)")
+    @GetMapping("/verification-status")
+    public ResponseEntity<Map<String, Boolean>> getVerificationStatus(@RequestParam String email) {
+        return userRepository.findByEmail(email)
+            .map(u -> ResponseEntity.ok(Map.of(
+                "emailVerified", u.isEmailVerified(),
+                "phoneVerified", u.isPhoneVerified()
+            )))
+            .orElseGet(() -> ResponseEntity.ok(Map.of(
+                "emailVerified", false,
+                "phoneVerified", false
+            )));
+    }
 
     @Operation(summary = "Platform statistics (no auth required)")
     @GetMapping("/stats")
