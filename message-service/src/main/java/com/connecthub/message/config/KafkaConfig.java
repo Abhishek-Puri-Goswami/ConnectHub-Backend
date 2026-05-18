@@ -38,16 +38,16 @@ public class KafkaConfig {
 
     // ── Topics ─────────────────────────────────────────────────────────────
     @Bean public NewTopic chatMessagesInbound() {
-        return TopicBuilder.name("chat.messages.inbound").partitions(3).replicas(1).build();
+        return TopicBuilder.name(AppConstants.TOPIC_MESSAGES_INBOUND).partitions(3).replicas(1).build();
     }
     @Bean public NewTopic chatMessagesInboundDlq() {
-        return TopicBuilder.name("chat.messages.inbound.dlq").partitions(1).replicas(1).build();
+        return TopicBuilder.name(AppConstants.TOPIC_MESSAGES_INBOUND_DLQ).partitions(1).replicas(1).build();
     }
     @Bean public NewTopic chatMessagesOutbound() {
-        return TopicBuilder.name("chat.messages.outbound").partitions(3).replicas(1).build();
+        return TopicBuilder.name(AppConstants.TOPIC_MESSAGES_OUTBOUND).partitions(3).replicas(1).build();
     }
     @Bean public NewTopic chatMessagesRejected() {
-        return TopicBuilder.name("chat.messages.rejected").partitions(3).replicas(1).build();
+        return TopicBuilder.name(AppConstants.TOPIC_MESSAGES_REJECTED).partitions(3).replicas(1).build();
     }
 
     // ── Producer (idempotent) ──────────────────────────────────────────────

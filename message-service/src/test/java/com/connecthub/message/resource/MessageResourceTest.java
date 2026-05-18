@@ -30,7 +30,7 @@ class MessageResourceTest {
     void send() {
         Message msg = new Message();
         when(svc.send(msg, "PRO")).thenReturn(msg);
-        assertEquals(HttpStatus.CREATED, res.send(msg, "PRO").getStatusCode());
+        assertEquals(HttpStatus.CREATED, res.send(msg, null, "PRO").getStatusCode());
     }
 
     @Test

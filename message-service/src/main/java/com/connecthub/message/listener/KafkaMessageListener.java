@@ -1,5 +1,6 @@
 package com.connecthub.message.listener;
 
+import com.connecthub.message.config.AppConstants;
 import com.connecthub.message.config.SubscriptionTierLimits;
 import com.connecthub.message.entity.Message;
 import com.connecthub.message.exception.TooManyRequestsException;
@@ -73,10 +74,13 @@ public class KafkaMessageListener {
     private final ObjectMapper objectMapper;
 
     /*
-     * Lifetime message cap for guest users. After 50 messages, the guest sees a
-     * prompt to sign up. This counter is stored in Redis and never resets.
+     * Delegate guest-limit constants to AppConstants so there is one source of truth.
+     * KafkaMessageListenerTest references GUEST_MESSAGE_LIMIT by value (50); it does
+     * not need to change because AppConstants.GUEST_MESSAGE_LIMIT == 50.
      */
-    private static final int GUEST_MESSAGE_LIMIT = 50;
+    private static final int    GUEST_MESSAGE_LIMIT      = AppConstants.GUEST_MESSAGE_LIMIT;
+    private static final String GUEST_USERNAME_PREFIX    = AppConstants.GUEST_USERNAME_PREFIX;
+    private static final String REDIS_GUEST_LIMITS_PREFIX = AppConstants.REDIS_GUEST_LIMITS_PREFIX;
 
     /**
      * processInboundMessage — the main Kafka listener for inbound chat messages.
@@ -91,7 +95,7 @@ public class KafkaMessageListener {
      */
     @SneakyThrows
     @KafkaListener(
-            topics = "chat.messages.inbound",
+            topics = AppConstants.TOPIC_MESSAGES_INBOUND,
             groupId = "message-service-group",
             containerFactory = "kafkaListenerContainerFactory"
     )
@@ -126,7 +130,7 @@ public class KafkaMessageListener {
         if (messageId != null && messageService.existsById(messageId)) {
             log.debug("Message {} already persisted — emitting outbound only ({}[{}]@{})",
                     messageId, topic, partition, offset);
-            kafkaTemplate.send("chat.messages.outbound", objectMapper.writeValueAsString(payload));
+            kafkaTemplate.send(AppConstants.TOPIC_MESSAGES_OUTBOUND, objectMapper.writeValueAsString(payload));
             return;
         }
 
@@ -136,9 +140,9 @@ public class KafkaMessageListener {
          * until they register. This runs after idempotency to avoid double-counting
          * re-consumed messages against the guest budget.
          */
-        boolean isGuest = senderUsername != null && senderUsername.startsWith("guest_");
+        boolean isGuest = senderUsername != null && senderUsername.startsWith(GUEST_USERNAME_PREFIX);
         if (isGuest) {
-            String limitKey = "guest:limits:" + senderId;
+            String limitKey = REDIS_GUEST_LIMITS_PREFIX + senderId;
             Long count = redisTemplate.opsForValue().increment(limitKey);
             if (count != null && count > GUEST_MESSAGE_LIMIT) {
                 log.warn("Guest {} hit message limit in room {} at {}[{}]@{}",
@@ -182,7 +186,7 @@ public class KafkaMessageListener {
         rejection.put("roomId", roomId);
         rejection.put("reason", "LIMIT_EXCEEDED");
         rejection.put("message", userMessage);
-        kafkaTemplate.send("chat.messages.rejected", objectMapper.writeValueAsString(rejection));
+        kafkaTemplate.send(AppConstants.TOPIC_MESSAGES_REJECTED, objectMapper.writeValueAsString(rejection));
     }
 
     /**
@@ -197,7 +201,7 @@ public class KafkaMessageListener {
         rejection.put("reason", "RATE_LIMIT");
         rejection.put("limit", limit);
         rejection.put("message", "You've reached your plan's messages per minute limit. Upgrade to PRO for a higher limit.");
-        kafkaTemplate.send("chat.messages.rejected", objectMapper.writeValueAsString(rejection));
+        kafkaTemplate.send(AppConstants.TOPIC_MESSAGES_REJECTED, objectMapper.writeValueAsString(rejection));
     }
 
     /**
@@ -206,7 +210,7 @@ public class KafkaMessageListener {
      * In production, this should trigger an alert so no message loss goes unnoticed.
      */
     @KafkaListener(
-            topics = "chat.messages.inbound.dlq",
+            topics = AppConstants.TOPIC_MESSAGES_INBOUND_DLQ,
             groupId = "message-service-dlq-group"
     )
     public void handleDlq(

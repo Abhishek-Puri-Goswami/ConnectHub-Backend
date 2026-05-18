@@ -1,5 +1,6 @@
 package com.connecthub.message.resource;
 
+import com.connecthub.message.config.AppConstants;
 import com.connecthub.message.config.SubscriptionTierLimits;
 import com.connecthub.message.entity.*;
 import com.connecthub.message.service.MessageService;
@@ -21,8 +22,8 @@ public class MessageResource {
 
 	@PostMapping
 	public ResponseEntity<Message> send(@RequestBody Message msg,
-			@RequestHeader(value = "X-User-Id", required = false) String userId,
-			@RequestHeader(value = "X-Subscription-Tier", required = false) String subscriptionTier) {
+			@RequestHeader(value = AppConstants.HEADER_USER_ID, required = false) String userId,
+			@RequestHeader(value = AppConstants.HEADER_SUBSCRIPTION_TIER, required = false) String subscriptionTier) {
 		// Always override senderId from the gateway-injected header — prevents spoofing
 		if (userId != null && !userId.isBlank()) {
 			try { msg.setSenderId(Integer.parseInt(userId)); }
