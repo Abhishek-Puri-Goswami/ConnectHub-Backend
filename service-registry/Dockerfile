@@ -6,6 +6,7 @@ WORKDIR /build
 # Copy parent pom first (for dependency caching)
 COPY pom.xml .
 COPY service-registry/pom.xml service-registry/pom.xml
+COPY config-server/pom.xml config-server/pom.xml
 COPY api-gateway/pom.xml api-gateway/pom.xml
 COPY auth-service/pom.xml auth-service/pom.xml
 COPY room-service/pom.xml room-service/pom.xml
