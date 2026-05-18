@@ -1,4 +1,4 @@
-package com.connecthub.notification.exception;
+package com.connecthub.payment.exception;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -30,16 +30,22 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", "Resource not found: " + ex.getResourcePath(), "status", 404));
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", ex.getMessage() != null ? ex.getMessage() : "Invalid request", "status", 400));
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntime(RuntimeException ex) {
-        log.error("Unhandled runtime exception in notification-service: ", ex);
+        log.error("Unhandled runtime exception in payment-service: ", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("error", ex.getMessage() != null ? ex.getMessage() : "Internal server error", "status", 500));
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleAll(Exception ex) {
-        log.error("Unhandled exception in notification-service: ", ex);
+        log.error("Unhandled exception in payment-service: ", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("error", ex.getMessage() != null ? ex.getMessage() : "Internal server error", "status", 500));
     }
