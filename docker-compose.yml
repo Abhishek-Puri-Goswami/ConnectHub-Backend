@@ -137,6 +137,9 @@ services:
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
       MANAGEMENT_ZIPKIN_TRACING_ENABLED: "false"
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_REDIRECT_URI: "${BACKEND_URL:-https://connecthub-app.duckdns.org}/login/oauth2/code/google"
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GITHUB_REDIRECT_URI: "${BACKEND_URL:-https://connecthub-app.duckdns.org}/login/oauth2/code/github"
     depends_on:
       kafka: { condition: service_healthy }
       redis: { condition: service_healthy }
