@@ -170,6 +170,11 @@ public class OtpService {
      */
     private String maskEmail(String email) {
         int at = email.indexOf('@');
+        if (at == -1) {
+            // Phone number — mask middle digits
+            if (email.length() <= 4) return "****";
+            return email.substring(0, 2) + "****" + email.substring(email.length() - 2);
+        }
         if (at <= 2) return "***" + email.substring(at);
         return email.charAt(0) + "***" + email.substring(at);
     }
