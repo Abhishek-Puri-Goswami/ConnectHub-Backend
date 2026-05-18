@@ -44,6 +44,7 @@ services:
     environment:
       EUREKA_USER: ${EUREKA_USER:-eureka}
       EUREKA_PASSWORD: ${EUREKA_PASSWORD}
+      MANAGEMENT_ZIPKIN_TRACING_ENABLED: "false"
     networks: [connecthub]
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8761/actuator/health"]
@@ -68,13 +69,12 @@ services:
       CONFIG_REPO_URI: ${CONFIG_REPO_URI:-https://github.com/Abhishek-Puri-Goswami/ConnectHub-Config-Server.git}
       CONFIG_REPO_USERNAME: ${CONFIG_REPO_USERNAME:-}
       CONFIG_REPO_PASSWORD: ${CONFIG_REPO_PASSWORD:-}
+      MANAGEMENT_ZIPKIN_TRACING_ENABLED: "false"
     depends_on:
       service-registry: { condition: service_healthy }
     restart: on-failure
     networks: [connecthub]
     healthcheck:
-      # wget --server-response prints the HTTP status line to stderr; redirect to stdout
-      # and check for any valid HTTP response — even a 401 means the server is up.
       test: ["CMD-SHELL", "wget --server-response --quiet http://localhost:8888/actuator/health 2>&1 | head -1 | grep -q 'HTTP/'"]
       interval: 15s
       timeout: 5s
@@ -100,6 +100,7 @@ services:
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
+      MANAGEMENT_ZIPKIN_TRACING_ENABLED: "false"
     depends_on:
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
@@ -135,6 +136,7 @@ services:
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
+      MANAGEMENT_ZIPKIN_TRACING_ENABLED: "false"
     depends_on:
       kafka: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -162,6 +164,7 @@ services:
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
+      MANAGEMENT_ZIPKIN_TRACING_ENABLED: "false"
     depends_on:
       kafka: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -189,6 +192,7 @@ services:
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
+      MANAGEMENT_ZIPKIN_TRACING_ENABLED: "false"
     depends_on:
       kafka: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -220,6 +224,7 @@ services:
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
+      MANAGEMENT_ZIPKIN_TRACING_ENABLED: "false"
     depends_on:
       kafka: { condition: service_healthy }
       service-registry: { condition: service_healthy }
@@ -242,6 +247,7 @@ services:
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
+      MANAGEMENT_ZIPKIN_TRACING_ENABLED: "false"
     depends_on:
       redis: { condition: service_healthy }
       service-registry: { condition: service_healthy }
@@ -276,6 +282,7 @@ services:
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
+      MANAGEMENT_ZIPKIN_TRACING_ENABLED: "false"
     depends_on:
       kafka: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -301,6 +308,7 @@ services:
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
+      MANAGEMENT_ZIPKIN_TRACING_ENABLED: "false"
     depends_on:
       kafka: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -332,6 +340,7 @@ services:
       CONFIG_SERVER_HOST: config-server
       CONFIG_SERVER_USER: ${CONFIG_SERVER_USER}
       CONFIG_SERVER_PASSWORD: ${CONFIG_SERVER_PASSWORD}
+      MANAGEMENT_ZIPKIN_TRACING_ENABLED: "false"
     depends_on:
       kafka: { condition: service_healthy }
       redis: { condition: service_healthy }
