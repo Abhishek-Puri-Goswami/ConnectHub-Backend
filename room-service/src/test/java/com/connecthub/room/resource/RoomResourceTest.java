@@ -122,7 +122,7 @@ class RoomResourceTest {
     @Test
     void all() {
         when(svc.getAllRooms()).thenReturn(List.of(new Room()));
-        assertEquals(HttpStatus.OK, res.all().getStatusCode());
+        assertEquals(HttpStatus.OK, res.all(null, null).getStatusCode());
     }
 
     @Test
