@@ -23,6 +23,9 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
+                // Internal service-to-service calls (no gateway JWT — called directly by media-service etc.)
+                .requestMatchers("/api/v1/rooms/*/members/*/check").permitAll()
+                .requestMatchers("/api/v1/rooms/count/active").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(gatewayAuthFilter, UsernamePasswordAuthenticationFilter.class);
