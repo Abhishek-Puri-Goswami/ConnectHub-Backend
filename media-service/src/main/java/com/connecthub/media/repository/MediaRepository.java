@@ -12,4 +12,7 @@ public interface MediaRepository extends JpaRepository<MediaFile, String> {
 
     @Query("SELECT COALESCE(SUM(m.sizeKb), 0) FROM MediaFile m WHERE m.uploaderId = :uid")
     long sumSizeKbByUploaderId(@Param("uid") int uid);
+
+    @Query("SELECT COALESCE(SUM(m.sizeKb), 0) FROM MediaFile m")
+    long sumAllSizeKb();
 }

@@ -290,4 +290,13 @@ public class MediaService {
      */
     @Transactional(readOnly = true)
     public int count(String roomId) { return repo.countByRoomId(roomId); }
+
+    /**
+     * getTotalStorageMb — returns total storage used by all platform files in megabytes.
+     * Converts from KB (stored in DB) to MB for the analytics dashboard.
+     */
+    @Transactional(readOnly = true)
+    public double getTotalStorageMb() {
+        return repo.sumAllSizeKb() / 1024.0;
+    }
 }

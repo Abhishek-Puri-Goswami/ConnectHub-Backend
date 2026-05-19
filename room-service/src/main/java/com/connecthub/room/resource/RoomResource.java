@@ -102,8 +102,19 @@ public class RoomResource {
 	}
 
 	@GetMapping
-	public ResponseEntity<List<Room>> all() {
+	public ResponseEntity<?> all(
+			@RequestParam(required = false) Integer page,
+			@RequestParam(required = false) Integer size) {
+		if (page != null && size != null) {
+			return ResponseEntity.ok(svc.getAllRoomsPaged(page, size));
+		}
 		return ResponseEntity.ok(svc.getAllRooms());
+	}
+
+	/** Active room count for admin stats strip and analytics (rooms with at least one message). */
+	@GetMapping("/count/active")
+	public ResponseEntity<Long> countActive() {
+		return ResponseEntity.ok(svc.countActiveRooms());
 	}
 
 	@PutMapping("/{id}/timestamp")

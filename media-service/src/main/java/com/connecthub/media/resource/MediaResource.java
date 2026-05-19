@@ -103,6 +103,12 @@ public class MediaResource {
         return ResponseEntity.ok(svc.count(roomId));
     }
 
+    /** Platform-wide total storage used in megabytes. Called by auth-service Feign client and admin dashboard. */
+    @GetMapping("/storage/total")
+    public ResponseEntity<Double> totalStorage() {
+        return ResponseEntity.ok(svc.getTotalStorageMb());
+    }
+
     /**
      * checkRoomMembership — verifies the user is a member of the room via room-service.
      * Returns true if the Feign call confirms membership. On Feign failure (room-service

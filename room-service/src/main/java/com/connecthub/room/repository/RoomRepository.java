@@ -40,5 +40,9 @@ public interface RoomRepository extends JpaRepository<Room, String> {
 
     /** P2-13: Find room by invite code */
     Optional<Room> findByInviteCode(String inviteCode);
+
+    /** Returns the number of rooms that have received at least one message (lastMessageAt set). */
+    @Query("SELECT COUNT(r) FROM Room r WHERE r.lastMessageAt IS NOT NULL")
+    long countActiveRooms();
 }
 

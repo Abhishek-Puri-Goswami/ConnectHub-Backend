@@ -23,4 +23,7 @@ public interface MessageRepository extends JpaRepository<Message, String> {
     List<Message> searchInRoom(@Param("rid") String roomId, @Param("kw") String keyword);
     void deleteByRoomId(String roomId);
     void deleteBySenderId(int senderId);
+
+    /** Returns count of non-deleted messages sent since the given cutoff timestamp. Used for daily message counts. */
+    long countByIsDeletedFalseAndSentAtAfter(java.time.LocalDateTime cutoff);
 }

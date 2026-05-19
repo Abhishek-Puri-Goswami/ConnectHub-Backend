@@ -1,7 +1,9 @@
 package com.connecthub.auth.resource;
 
+import com.connecthub.auth.entity.AnalyticsSnapshot;
 import com.connecthub.auth.entity.AuditLog;
 import com.connecthub.auth.entity.User;
+import com.connecthub.auth.service.AnalyticsService;
 import com.connecthub.auth.service.AuditService;
 import com.connecthub.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +24,7 @@ public class AdminResource {
 
     private final AuthService authService;
     private final AuditService auditService;
+    private final AnalyticsService analyticsService;
     private final StringRedisTemplate redis;
 
     private static final String SUSPENDED_CHANNEL = "chat:suspended";
@@ -109,5 +112,11 @@ public class AdminResource {
     @GetMapping("/users")
     public ResponseEntity<java.util.List<User>> getAllUsers() {
         return ResponseEntity.ok(authService.getAllUsers());
+    }
+
+    /** Returns the last 96 analytics snapshots (24h at 15-min intervals) for the admin dashboard charts. */
+    @GetMapping("/analytics")
+    public ResponseEntity<java.util.List<AnalyticsSnapshot>> getAnalytics() {
+        return ResponseEntity.ok(analyticsService.getRecentSnapshots());
     }
 }

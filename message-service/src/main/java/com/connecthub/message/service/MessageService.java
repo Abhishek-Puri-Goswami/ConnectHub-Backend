@@ -256,6 +256,13 @@ public class MessageService {
      */
     public void clearHistory(String roomId) { msgRepo.deleteByRoomId(roomId); }
 
+    /** countToday — returns the number of non-deleted messages sent since midnight today. Used by admin stats and analytics. */
+    @Transactional(readOnly = true)
+    public long countToday() {
+        LocalDateTime startOfDay = LocalDateTime.now().toLocalDate().atStartOfDay();
+        return msgRepo.countByIsDeletedFalseAndSentAtAfter(startOfDay);
+    }
+
     /**
      * addReaction — records an emoji reaction from a user on a specific message.
      * The combination of (messageId, userId, emoji) must be unique — reacting with

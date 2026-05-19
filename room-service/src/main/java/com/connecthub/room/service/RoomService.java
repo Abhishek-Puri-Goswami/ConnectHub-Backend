@@ -311,6 +311,17 @@ public class RoomService {
     /** getAllRooms — admin-only endpoint that returns all rooms in the system. */
     @Transactional(readOnly = true) public List<Room> getAllRooms() { return roomRepo.findAll(); }
 
+    /** getAllRoomsPaged — paginated version of getAllRooms for the admin dashboard rooms tab. */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<Room> getAllRoomsPaged(int page, int size) {
+        return roomRepo.findAll(org.springframework.data.domain.PageRequest.of(page, size,
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")));
+    }
+
+    /** countActiveRooms — count of rooms that have received at least one message. Used by admin analytics. */
+    @Transactional(readOnly = true)
+    public long countActiveRooms() { return roomRepo.countActiveRooms(); }
+
     /**
      * normalizeType — validates and uppercases the room type from the request.
      * Only "DM" and "GROUP" are supported. Throws BadRequestException for unknown types.

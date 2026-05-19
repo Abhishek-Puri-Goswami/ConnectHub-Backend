@@ -93,4 +93,10 @@ public class MessageResource {
 	public ResponseEntity<List<MessageReaction>> reactions(@PathVariable String id) {
 		return ResponseEntity.ok(svc.getReactions(id));
 	}
+
+	/** Returns the count of messages sent today (since midnight). Used by admin stats strip and analytics snapshots. */
+	@GetMapping("/count/today")
+	public ResponseEntity<Long> countToday() {
+		return ResponseEntity.ok(svc.countToday());
+	}
 }
