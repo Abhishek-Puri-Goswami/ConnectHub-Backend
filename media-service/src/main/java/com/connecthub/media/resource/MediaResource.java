@@ -103,6 +103,19 @@ public class MediaResource {
         return ResponseEntity.ok(svc.count(roomId));
     }
 
+    /**
+     * uploadProfilePicture — accepts an image file and stores it in S3 under avatars/.
+     * No room check required — profile pictures are user-scoped.
+     * Returns { url: "https://..." } so the frontend can update the user's avatarUrl.
+     */
+    @PostMapping("/profile-picture")
+    public ResponseEntity<java.util.Map<String, String>> uploadProfilePicture(
+            @RequestParam("file") MultipartFile file,
+            @RequestHeader("X-User-Id") int uid) throws IOException {
+        MediaFile saved = svc.uploadProfilePicture(file, uid);
+        return ResponseEntity.ok(java.util.Map.of("url", saved.getUrl()));
+    }
+
     /** Platform-wide total storage used in megabytes. Called by auth-service Feign client and admin dashboard. */
     @GetMapping("/storage/total")
     public ResponseEntity<Double> totalStorage() {

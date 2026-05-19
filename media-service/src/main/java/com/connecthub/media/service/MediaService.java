@@ -98,9 +98,14 @@ public class MediaService {
 
     /*
      * Image MIME types that receive thumbnail generation.
-     * Non-image ALLOWED types (PDF, Word, ZIP, text) are stored as-is without thumbnails.
+     * Non-image ALLOWED types (PDF, Word, ZIP, text, video) are stored as-is without thumbnails.
      */
     private static final Set<String> IMAGES = Set.of("image/jpeg", "image/png", "image/gif", "image/webp");
+
+    /** Video MIME types — larger size limit applies, stored under videos/ prefix in S3. */
+    private static final Set<String> VIDEOS = Set.of(
+            "video/mp4", "video/webm", "video/quicktime", "video/x-msvideo",
+            "video/x-matroska", "video/x-ms-wmv", "video/3gpp");
 
     /*
      * Whitelist of permitted MIME types. Any content-type not in this set is rejected.
@@ -110,13 +115,14 @@ public class MediaService {
             "image/jpeg", "image/png", "image/gif", "image/webp",
             "application/pdf", "application/msword",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/zip", "text/plain");
+            "application/zip", "text/plain",
+            "video/mp4", "video/webm", "video/quicktime", "video/x-msvideo",
+            "video/x-matroska", "video/x-ms-wmv", "video/3gpp");
 
-    /*
-     * Application-level 2MB file size cap. Spring's multipart config also enforces
-     * this at the framework level, but this provides a second line of defense.
-     */
+    /** Standard file size cap: 2MB for images/documents. */
     private static final long MAX_SIZE = 2 * 1024 * 1024;
+    /** Extended size cap for video uploads: 50MB. */
+    private static final long MAX_VIDEO_SIZE = 50 * 1024 * 1024;
 
     /**
      * upload — validates, uploads to S3, generates a thumbnail if applicable, and persists the media record.
@@ -134,7 +140,10 @@ public class MediaService {
             throw new MediaPlanLimitException("Upload rate limit exceeded for your plan");
         }
         if (file.isEmpty()) throw new RuntimeException("Empty file");
-        if (file.getSize() > MAX_SIZE) throw new RuntimeException("File exceeds 2MB limit");
+        boolean isVideo = VIDEOS.contains(file.getContentType());
+        long sizeLimit = isVideo ? MAX_VIDEO_SIZE : MAX_SIZE;
+        if (file.getSize() > sizeLimit)
+            throw new RuntimeException(isVideo ? "Video exceeds 50MB limit" : "File exceeds 2MB limit");
 
         long capKb = MediaTierLimits.storageCapKb(tier);
         long usedKb = repo.sumSizeKbByUploaderId(uploaderId);
@@ -157,7 +166,7 @@ public class MediaService {
         String originalName = file.getOriginalFilename() != null
                 ? file.getOriginalFilename().replaceAll("[^a-zA-Z0-9._-]", "_") : "file";
         String uuid = UUID.randomUUID().toString();
-        String subDir = IMAGES.contains(contentType) ? "images" : "files";
+        String subDir = IMAGES.contains(contentType) ? "images" : VIDEOS.contains(contentType) ? "videos" : "files";
         String s3Key = subDir + "/" + uuid + "/" + originalName;
 
         /*
@@ -225,6 +234,41 @@ public class MediaService {
              * Always clean up the local temp file regardless of success or failure.
              * Without this, failed uploads would leave orphaned files in the OS temp directory.
              */
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    /**
+     * uploadProfilePicture — uploads a user avatar image to S3 under the avatars/ prefix.
+     * No room membership check or storage quota applies — profile pictures are a fixed
+     * user-level asset. Only image types are accepted (jpeg, png, gif, webp).
+     */
+    public MediaFile uploadProfilePicture(MultipartFile file, int uploaderId) throws IOException {
+        if (file.isEmpty()) throw new RuntimeException("Empty file");
+        if (file.getSize() > MAX_SIZE) throw new RuntimeException("File exceeds 2MB limit");
+        String contentType = file.getContentType();
+        if (contentType == null || !IMAGES.contains(contentType))
+            throw new RuntimeException("Only image files are allowed for profile pictures");
+
+        String originalName = file.getOriginalFilename() != null
+                ? file.getOriginalFilename().replaceAll("[^a-zA-Z0-9._-]", "_") : "avatar";
+        String uuid = UUID.randomUUID().toString();
+        String s3Key = "avatars/" + uuid + "/" + originalName;
+        Path tempFile = Files.createTempFile("avatar_", originalName);
+        file.transferTo(tempFile.toFile());
+        try {
+            s3Client.putObject(PutObjectRequest.builder()
+                            .bucket(bucketName).key(s3Key).contentType(contentType).build(),
+                    RequestBody.fromFile(tempFile.toFile()));
+            String url = buildMediaUrl(s3Key);
+            MediaFile media = MediaFile.builder()
+                    .uploaderId(uploaderId).roomId(null)
+                    .filename(s3Key).originalName(originalName)
+                    .url(url).mimeType(contentType)
+                    .sizeKb(file.getSize() / 1024).build();
+            log.info("Profile picture uploaded for user {}: {}", uploaderId, url);
+            return repo.save(media);
+        } finally {
             Files.deleteIfExists(tempFile);
         }
     }
