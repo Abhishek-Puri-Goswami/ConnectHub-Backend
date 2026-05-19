@@ -21,7 +21,7 @@ COPY code-coverage-report/pom.xml code-coverage-report/pom.xml
 RUN mvn -pl api-gateway -am dependency:go-offline -q
 
 COPY api-gateway/src api-gateway/src
-RUN mvn -pl api-gateway -am package -DskipTests -q
+RUN mvn -pl api-gateway -am package -Dmaven.test.skip=true
 
 # ── Stage 2: Runtime ────────────────────────────────────────────────────────────
 FROM eclipse-temurin:17-jre-alpine

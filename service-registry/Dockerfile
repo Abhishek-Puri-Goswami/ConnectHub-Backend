@@ -24,7 +24,7 @@ RUN mvn -pl service-registry -am dependency:go-offline -q
 
 # Copy source and build
 COPY service-registry/src service-registry/src
-RUN mvn -pl service-registry -am package -DskipTests -q
+RUN mvn -pl service-registry -am package -Dmaven.test.skip=true
 
 # â”€â”€ Stage 2: Runtime â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 FROM eclipse-temurin:17-jre-alpine

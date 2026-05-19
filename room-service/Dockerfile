@@ -21,7 +21,7 @@ COPY code-coverage-report/pom.xml code-coverage-report/pom.xml
 RUN mvn -pl room-service -am dependency:go-offline -q
 
 COPY room-service/src room-service/src
-RUN mvn -pl room-service -am package -DskipTests -q
+RUN mvn -pl room-service -am package -Dmaven.test.skip=true
 
 # â”€â”€ Stage 2: Runtime â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 FROM eclipse-temurin:17-jre-alpine

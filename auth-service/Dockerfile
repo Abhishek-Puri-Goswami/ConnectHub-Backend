@@ -21,7 +21,7 @@ COPY code-coverage-report/pom.xml code-coverage-report/pom.xml
 RUN mvn -pl auth-service -am dependency:go-offline -q
 
 COPY auth-service/src auth-service/src
-RUN mvn -pl auth-service -am package -DskipTests -q
+RUN mvn -pl auth-service -am package -Dmaven.test.skip=true
 
 # â”€â”€ Stage 2: Runtime â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 FROM eclipse-temurin:17-jre-alpine

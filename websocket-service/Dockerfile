@@ -21,7 +21,7 @@ COPY code-coverage-report/pom.xml code-coverage-report/pom.xml
 RUN mvn -pl websocket-service -am dependency:go-offline -q
 
 COPY websocket-service/src websocket-service/src
-RUN mvn -pl websocket-service -am package -DskipTests -q
+RUN mvn -pl websocket-service -am package -Dmaven.test.skip=true
 
 # â”€â”€ Stage 2: Runtime â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 FROM eclipse-temurin:17-jre-alpine

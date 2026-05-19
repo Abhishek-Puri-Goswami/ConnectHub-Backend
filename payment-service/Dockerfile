@@ -20,7 +20,7 @@ COPY code-coverage-report/pom.xml code-coverage-report/pom.xml
 RUN mvn -pl payment-service -am dependency:go-offline -q
 
 COPY payment-service/src payment-service/src
-RUN mvn -pl payment-service -am package -DskipTests -q
+RUN mvn -pl payment-service -am package -Dmaven.test.skip=true
 
 # ── Stage 2: Runtime ────────────────────────────────────────────────────────────
 FROM eclipse-temurin:17-jre-alpine

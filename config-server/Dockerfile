@@ -21,7 +21,7 @@ COPY code-coverage-report/pom.xml code-coverage-report/pom.xml
 RUN mvn -pl config-server -am dependency:go-offline -q
 
 COPY config-server/src config-server/src
-RUN mvn -pl config-server -am package -DskipTests -q
+RUN mvn -pl config-server -am package -Dmaven.test.skip=true
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine
