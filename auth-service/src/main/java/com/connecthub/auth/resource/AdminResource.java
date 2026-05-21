@@ -1,11 +1,15 @@
 package com.connecthub.auth.resource;
 
+import com.connecthub.auth.dto.AnnouncementDto;
+import com.connecthub.auth.entity.Announcement;
 import com.connecthub.auth.entity.AnalyticsSnapshot;
 import com.connecthub.auth.entity.AuditLog;
 import com.connecthub.auth.entity.User;
+import com.connecthub.auth.repository.AnnouncementRepository;
 import com.connecthub.auth.service.AnalyticsService;
 import com.connecthub.auth.service.AuditService;
 import com.connecthub.auth.service.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -14,10 +18,11 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @RestController
-@RequestMapping("/api/v1/auth/admin")
+@RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 @Tag(name = "Platform Admin", description = "User management, audit logs")
 public class AdminResource {
@@ -26,6 +31,7 @@ public class AdminResource {
     private final AuditService auditService;
     private final AnalyticsService analyticsService;
     private final StringRedisTemplate redis;
+    private final AnnouncementRepository announcementRepository;
 
     private static final String SUSPENDED_CHANNEL = "chat:suspended";
 
@@ -48,7 +54,7 @@ public class AdminResource {
         return null;
     }
 
-    @PutMapping("/users/{userId}/suspend")
+    @PutMapping("/admin/users/{userId}/suspend")
     public ResponseEntity<User> suspend(@PathVariable int userId,
             @RequestHeader("X-User-Id") int adminId,
             @RequestHeader(value = "X-User-Role", defaultValue = "") String requesterRole,
@@ -63,7 +69,7 @@ public class AdminResource {
         return ResponseEntity.ok(u);
     }
 
-    @PutMapping("/users/{userId}/reactivate")
+    @PutMapping("/admin/users/{userId}/reactivate")
     public ResponseEntity<User> reactivate(@PathVariable int userId,
             @RequestHeader("X-User-Id") int adminId,
             @RequestHeader(value = "X-User-Role", defaultValue = "") String requesterRole,
@@ -77,7 +83,7 @@ public class AdminResource {
         return ResponseEntity.ok(u);
     }
 
-    @DeleteMapping("/users/{userId}")
+    @DeleteMapping("/admin/users/{userId}")
     public ResponseEntity<Void> delete(@PathVariable int userId,
             @RequestHeader("X-User-Id") int adminId,
             @RequestHeader(value = "X-User-Role", defaultValue = "") String requesterRole,
@@ -90,7 +96,7 @@ public class AdminResource {
         return ResponseEntity.noContent().build();
     }
 
-    @PutMapping("/users/{userId}/role")
+    @PutMapping("/admin/users/{userId}/role")
     public ResponseEntity<User> changeRole(@PathVariable int userId, @RequestBody java.util.Map<String, String> body,
             @RequestHeader("X-User-Id") int adminId,
             @RequestHeader(value = "X-User-Role", defaultValue = "") String requesterRole,
@@ -104,19 +110,51 @@ public class AdminResource {
         return ResponseEntity.ok(u);
     }
 
-    @GetMapping("/audit")
+    @GetMapping("/admin/audit")
     public ResponseEntity<Page<AuditLog>> getAuditLogs(@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size) {
         return ResponseEntity.ok(auditService.getLogs(page, size));
     }
 
-    @GetMapping("/users")
+    @GetMapping("/admin/users")
     public ResponseEntity<java.util.List<User>> getAllUsers() {
         return ResponseEntity.ok(authService.getAllUsers());
     }
 
     /** Returns the last 96 analytics snapshots (24h at 15-min intervals) for the admin dashboard charts. */
-    @GetMapping("/analytics")
+    @GetMapping("/admin/analytics")
     public ResponseEntity<java.util.List<AnalyticsSnapshot>> getAnalytics() {
         return ResponseEntity.ok(analyticsService.getRecentSnapshots());
+    }
+
+    @PostMapping("/admin/announcements")
+    @Operation(summary = "Create platform announcement")
+    public ResponseEntity<AnnouncementDto> createAnnouncement(
+            @RequestHeader("X-User-Id") int adminId,
+            @RequestHeader("X-User-Role") String role,
+            @RequestBody AnnouncementDto req) {
+        if (!role.equals("ADMIN") && !role.equals("PLATFORM_ADMIN")) return ResponseEntity.status(403).build();
+        if (req.getContent() == null || req.getContent().isBlank()) return ResponseEntity.badRequest().build();
+        User admin = authService.getUserById(adminId);
+        Announcement saved = announcementRepository.save(Announcement.builder()
+                .title(req.getTitle())
+                .content(req.getContent())
+                .adminId(adminId)
+                .adminName(admin.getFullName() != null ? admin.getFullName() : admin.getUsername())
+                .build());
+        return ResponseEntity.ok(toDto(saved));
+    }
+
+    @GetMapping("/announcements")
+    @Operation(summary = "Get all platform announcements (newest first)")
+    public ResponseEntity<List<AnnouncementDto>> getAnnouncements() {
+        return ResponseEntity.ok(announcementRepository.findTop50ByOrderByCreatedAtDesc()
+                .stream().map(this::toDto).toList());
+    }
+
+    private AnnouncementDto toDto(Announcement a) {
+        return AnnouncementDto.builder()
+                .id(a.getId()).title(a.getTitle()).content(a.getContent())
+                .adminId(a.getAdminId()).adminName(a.getAdminName()).createdAt(a.getCreatedAt())
+                .build();
     }
 }
