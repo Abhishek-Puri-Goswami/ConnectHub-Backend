@@ -38,10 +38,6 @@ public interface UserRepository extends JpaRepository<User, Integer> {
 
     void deleteByEmailVerifiedFalseAndCreatedAtBefore(LocalDateTime threshold);
 
-    @org.springframework.data.jpa.repository.Modifying
-    @Query("DELETE FROM User u WHERE u.username LIKE 'guest\\_%' AND u.createdAt < :threshold")
-    int deleteGuestAccountsOlderThan(@Param("threshold") LocalDateTime threshold);
-
     long countByActiveTrue();
 
     long countByActiveFalse();

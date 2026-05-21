@@ -259,37 +259,6 @@ public class AuthServiceImpl implements AuthService {
     }
 
     // =========================================================================
-    // GUEST LOGIN
-    // =========================================================================
-
-    /**
-     * loginAsGuest — creates a temporary guest account and returns JWT tokens.
-     * The guest has role=GUEST so the gateway can apply stricter rate limits.
-     * A random UUID fragment is used for the username and email to ensure
-     * uniqueness.
-     * The password is a random UUID hash — no one can log in as this guest via
-     * password.
-     */
-    @Override
-    public AuthResponse loginAsGuest() {
-        String uuid = java.util.UUID.randomUUID().toString().substring(0, 8);
-        String guestUsername = "guest_" + uuid;
-        User user = User.builder()
-                .username(guestUsername)
-                .email(guestUsername + "@guest.connecthub.local")
-                .passwordHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
-                .fullName("Guest " + uuid)
-                .emailVerified(true)
-                .phoneVerified(true)
-                .role("GUEST")
-                .subscriptionTier("FREE")
-                .build();
-        userRepository.save(user);
-        log.info("Temporary Guest user created: {}", guestUsername);
-        return buildAuthResponse(user);
-    }
-
-    // =========================================================================
     // LOGIN — EMAIL + OTP
     // =========================================================================
 
@@ -657,7 +626,7 @@ public class AuthServiceImpl implements AuthService {
         u.setRole(normalized);
         if ("ADMIN".equals(normalized) || "PLATFORM_ADMIN".equals(normalized)) {
             u.setSubscriptionTier("PRO");
-        } else if ("USER".equals(normalized) || "GUEST".equals(normalized)) {
+        } else if ("USER".equals(normalized)) {
             u.setSubscriptionTier("FREE");
         }
         User saved = userRepository.save(u);

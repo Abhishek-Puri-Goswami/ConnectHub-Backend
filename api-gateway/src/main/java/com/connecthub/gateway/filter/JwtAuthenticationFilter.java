@@ -87,9 +87,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      * its own signature-based authentication, not a user JWT.
      */
     private static final List<String> OPEN_ENDPOINTS = List.of(
-            "/api/v1/auth/register", 
-            "/api/v1/auth/login", 
-            "/api/v1/auth/guest",
+            "/api/v1/auth/register",
+            "/api/v1/auth/login",
             "/api/v1/auth/public/",       // public stats & unauthenticated endpoints
             "/api/v1/auth/verify-registration-otp", 
             "/api/v1/auth/resend-registration-otp",

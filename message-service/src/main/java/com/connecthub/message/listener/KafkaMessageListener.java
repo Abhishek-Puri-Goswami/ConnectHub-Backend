@@ -73,15 +73,6 @@ public class KafkaMessageListener {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ObjectMapper objectMapper;
 
-    /*
-     * Delegate guest-limit constants to AppConstants so there is one source of truth.
-     * KafkaMessageListenerTest references GUEST_MESSAGE_LIMIT by value (50); it does
-     * not need to change because AppConstants.GUEST_MESSAGE_LIMIT == 50.
-     */
-    private static final int    GUEST_MESSAGE_LIMIT      = AppConstants.GUEST_MESSAGE_LIMIT;
-    private static final String GUEST_USERNAME_PREFIX    = AppConstants.GUEST_USERNAME_PREFIX;
-    private static final String REDIS_GUEST_LIMITS_PREFIX = AppConstants.REDIS_GUEST_LIMITS_PREFIX;
-
     /**
      * processInboundMessage — the main Kafka listener for inbound chat messages.
      *
@@ -132,25 +123,6 @@ public class KafkaMessageListener {
                     messageId, topic, partition, offset);
             kafkaTemplate.send(AppConstants.TOPIC_MESSAGES_OUTBOUND, objectMapper.writeValueAsString(payload));
             return;
-        }
-
-        /*
-         * Guest lifetime cap: increment the counter and reject if over the limit.
-         * The Redis key never expires — once a guest hits 50 messages, they stay blocked
-         * until they register. This runs after idempotency to avoid double-counting
-         * re-consumed messages against the guest budget.
-         */
-        boolean isGuest = senderUsername != null && senderUsername.startsWith(GUEST_USERNAME_PREFIX);
-        if (isGuest) {
-            String limitKey = REDIS_GUEST_LIMITS_PREFIX + senderId;
-            Long count = redisTemplate.opsForValue().increment(limitKey);
-            if (count != null && count > GUEST_MESSAGE_LIMIT) {
-                log.warn("Guest {} hit message limit in room {} at {}[{}]@{}",
-                        senderId, roomId, topic, partition, offset);
-                emitRejection(senderId, roomId,
-                        "You've reached your free 50 message limit. Please sign up to continue chatting!");
-                return;
-            }
         }
 
         Message msg = new Message();

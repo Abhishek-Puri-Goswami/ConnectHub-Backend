@@ -18,9 +18,6 @@ public interface AuthService {
     // Login — classic (email/username + password)
     AuthResponse login(LoginRequest request);
 
-    // Guest login
-    AuthResponse loginAsGuest();
-
     // Login — Email + OTP
     ApiResponse<Void> requestEmailLoginOtp(EmailLoginOtpRequest request);
     AuthResponse loginWithEmailOtp(OtpVerifyRequest request);

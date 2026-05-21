@@ -78,12 +78,6 @@ public class AuthResource {
         return ResponseEntity.ok(authService.login(request));
     }
 
-    @PostMapping("/guest")
-    @Operation(summary = "Login as anonymous guest", description = "Generates temporary session for freemium testing limits")
-    public ResponseEntity<AuthResponse> loginAsGuest() {
-        return ResponseEntity.ok(authService.loginAsGuest());
-    }
-
     // ─── Login: Email + OTP ──────────────────────────────────────────
 
     @PostMapping("/login/email/request-otp")

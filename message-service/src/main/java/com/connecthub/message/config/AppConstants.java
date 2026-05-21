@@ -70,19 +70,4 @@ public final class AppConstants {
 
     /** Message has been read by all intended recipients. */
     public static final String STATUS_READ      = "READ";
-
-    // ── Guest Rate-Limiting ───────────────────────────────────────────────────
-
-    /**
-     * Username prefix that identifies unauthenticated / guest senders.
-     * Guests who have sent more than GUEST_MESSAGE_LIMIT messages in the
-     * current session are rejected to prevent abuse.
-     */
-    public static final String GUEST_USERNAME_PREFIX = "guest_";
-
-    /** Maximum number of messages a guest user may send before being rate-limited. */
-    public static final int    GUEST_MESSAGE_LIMIT   = 50;
-
-    /** Redis key prefix for guest message counters: {@code guest:limits:<userId>}. */
-    public static final String REDIS_GUEST_LIMITS_PREFIX = "guest:limits:";
 }
