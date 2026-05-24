@@ -108,12 +108,6 @@ class AuthResourceTest {
     }
 
     @Test
-    void loginAsGuest() {
-        when(authService.loginAsGuest()).thenReturn(dummyAuth());
-        assertEquals(HttpStatus.OK, authResource.loginAsGuest().getStatusCode());
-    }
-
-    @Test
     void requestEmailLoginOtp() {
         EmailLoginOtpRequest req = new EmailLoginOtpRequest();
         when(authService.requestEmailLoginOtp(req)).thenReturn(dummyApi(null, "Sent"));

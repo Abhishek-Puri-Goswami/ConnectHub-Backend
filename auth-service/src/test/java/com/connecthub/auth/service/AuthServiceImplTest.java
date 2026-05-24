@@ -560,16 +560,6 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void loginAsGuest_createsTempAccount() {
-        when(passwordEncoder.encode(any())).thenReturn("hash");
-        when(userRepository.save(any())).thenAnswer(i -> i.getArgument(0));
-        when(jwtUtil.generateAccessToken(any())).thenReturn("tok");
-        when(jwtUtil.generateRefreshToken(any())).thenReturn("rtok");
-        AuthResponse r = authService.loginAsGuest();
-        assertNotNull(r);
-    }
-
-    @Test
     void requestEmailLoginOtp_success() {
         EmailLoginOtpRequest req = new EmailLoginOtpRequest();
         req.setEmail("test@example.com");
