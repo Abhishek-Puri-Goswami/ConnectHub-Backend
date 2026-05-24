@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.connecthub</groupId>
+        <artifactId>connecthub-parent</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    <artifactId>common-lib</artifactId>
+    <name>ConnectHub Common Library</name>
+    <description>
+        Shared cross-cutting concerns for all ConnectHub microservices:
+        PerformanceAspect, LoggingAspect, ExceptionAspect, TraceIdFilter.
+        Registered via Spring Boot auto-configuration so every service that
+        includes this dependency gets the beans without any extra config.
+    </description>
+
+    <dependencies>
+        <!-- AOP support for aspect beans -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+        <!-- Servlet API for TraceIdFilter (servlet-stack services only) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- Auto-configuration support -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+</project>

@@ -12,6 +12,7 @@ import com.connecthub.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -131,9 +132,8 @@ public class AdminResource {
     public ResponseEntity<AnnouncementDto> createAnnouncement(
             @RequestHeader("X-User-Id") int adminId,
             @RequestHeader(value = "X-User-Role", defaultValue = "") String role,
-            @RequestBody AnnouncementDto req) {
+            @Valid @RequestBody AnnouncementDto req) {
         if (!role.equals("ADMIN") && !role.equals("PLATFORM_ADMIN")) return ResponseEntity.status(403).build();
-        if (req.getContent() == null || req.getContent().isBlank()) return ResponseEntity.badRequest().build();
         User admin = authService.getUserById(adminId);
         Announcement saved = announcementRepository.save(Announcement.builder()
                 .title(req.getTitle())

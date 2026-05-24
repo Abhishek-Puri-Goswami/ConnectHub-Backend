@@ -1,20 +1,25 @@
-package com.connecthub.payment.aspect;
+package com.connecthub.common.aspect;
 
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
-import org.springframework.stereotype.Component;
 
+/**
+ * Monitors execution time of every service-layer method across all ConnectHub microservices.
+ * Logs a WARN when a call exceeds SLOW_THRESHOLD_MS.
+ *
+ * Registered automatically via ConnectHubCommonAutoConfiguration — no @Component needed.
+ */
 @Aspect
-@Component
 @Slf4j
 public class PerformanceAspect {
 
     private static final long SLOW_THRESHOLD_MS = 500;
 
-    @Pointcut("execution(* com.connecthub.payment.service.*.*(..))")
+    /** Matches any method in any ConnectHub service's service package. */
+    @Pointcut("execution(* com.connecthub.*.service.*.*(..))")
     public void serviceMethods() {}
 
     @Around("serviceMethods()")

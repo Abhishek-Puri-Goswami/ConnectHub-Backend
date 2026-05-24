@@ -86,6 +86,55 @@ class RoomServiceTest {
     }
 
     @Test
+    void createGroup_premiumTierUnlimited_ok() {
+        // PREMIUM was added alongside PLATINUM — must bypass the free-tier cap
+        CreateRoomRequest req = new CreateRoomRequest();
+        req.setName("Premium Room"); req.setType("GROUP"); req.setMemberIds(List.of(2));
+        Room saved = Room.builder().roomId("r3").name("Premium Room").type("GROUP").createdById(1).maxMembers(500).build();
+        when(roomRepo.save(any())).thenReturn(saved);
+        when(memberRepo.existsByRoomIdAndUserId(any(), anyInt())).thenReturn(false);
+        when(memberRepo.countByRoomId(any())).thenReturn(0);
+        when(roomRepo.findByRoomId("r3")).thenReturn(Optional.of(saved));
+        when(memberRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        Room result = svc.createRoom(1, req, "PREMIUM");
+        assertEquals("GROUP", result.getType());
+        // Confirm no group-count check was made (paid tier skips the DB query)
+        verify(roomRepo, never()).countByCreatedByIdAndType(anyInt(), eq("GROUP"));
+    }
+
+    @Test
+    void createGroup_platinumTierUnlimited_ok() {
+        CreateRoomRequest req = new CreateRoomRequest();
+        req.setName("Platinum Room"); req.setType("GROUP"); req.setMemberIds(List.of(2));
+        Room saved = Room.builder().roomId("r4").name("Platinum Room").type("GROUP").createdById(1).maxMembers(500).build();
+        when(roomRepo.save(any())).thenReturn(saved);
+        when(memberRepo.existsByRoomIdAndUserId(any(), anyInt())).thenReturn(false);
+        when(memberRepo.countByRoomId(any())).thenReturn(0);
+        when(roomRepo.findByRoomId("r4")).thenReturn(Optional.of(saved));
+        when(memberRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        Room result = svc.createRoom(1, req, "PLATINUM");
+        assertEquals("GROUP", result.getType());
+        verify(roomRepo, never()).countByCreatedByIdAndType(anyInt(), eq("GROUP"));
+    }
+
+    @Test
+    void createGroup_businessTierUnlimited_ok() {
+        CreateRoomRequest req = new CreateRoomRequest();
+        req.setName("Business Room"); req.setType("GROUP"); req.setMemberIds(List.of(2));
+        Room saved = Room.builder().roomId("r5").name("Business Room").type("GROUP").createdById(1).maxMembers(500).build();
+        when(roomRepo.save(any())).thenReturn(saved);
+        when(memberRepo.existsByRoomIdAndUserId(any(), anyInt())).thenReturn(false);
+        when(memberRepo.countByRoomId(any())).thenReturn(0);
+        when(roomRepo.findByRoomId("r5")).thenReturn(Optional.of(saved));
+        when(memberRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        Room result = svc.createRoom(1, req, "BUSINESS");
+        assertEquals("GROUP", result.getType());
+    }
+
+    @Test
     void createDM_wrongMemberCount_throws() {
         CreateRoomRequest req = new CreateRoomRequest();
         req.setType("DM"); req.setMemberIds(List.of(2, 3));

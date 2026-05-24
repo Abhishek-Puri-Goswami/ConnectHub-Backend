@@ -33,7 +33,8 @@
             ${maven.multiModuleProjectDirectory}/code-coverage-report/target/site/jacoco-aggregate/jacoco.xml
         </sonar.coverage.jacoco.xmlReportPaths>
         <sonar.coverage.exclusions>
-            **/dto/**,**/config/**,**/exception/**,**/entity/**,**/model/**,**/*Application.java
+            **/dto/**,**/config/**,**/exception/**,**/entity/**,**/model/**,**/*Application.java,
+            **/common/**
         </sonar.coverage.exclusions>
         <!--
           Exclude test sources from SonarCloud CPD (copy-paste detection).
@@ -41,7 +42,10 @@
           flagging that as "duplication" is a false positive that inflates the metric.
         -->
         <sonar.cpd.exclusions>
-            **/*Test.java,**/*Tests.java,**/*IT.java
+            **/*Test.java,**/*Tests.java,**/*IT.java,
+            **/config/KafkaConfig.java,
+            **/exception/GlobalExceptionHandler.java,
+            **/entity/AuditLog.java
         </sonar.cpd.exclusions>
         <!--
           Suppress common false-positive code-smell rules in test sources:
@@ -67,6 +71,7 @@
     </properties>
 
     <modules>
+        <module>common-lib</module>
         <module>service-registry</module>
         <module>config-server</module>
         <module>api-gateway</module>

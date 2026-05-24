@@ -233,9 +233,13 @@ public class SubscriptionService {
             String email = sub.getUserEmail();
             if (email == null || email.isBlank()) return;
             String rupees = String.format("%.2f", amountPaisa / 100.0);
-            String msgPayload = String.format(
-                    "{\"to\":\"%s\",\"purpose\":\"subscription_confirmation\",\"plan\":\"%s\",\"amount\":\"₹%s\"}",
-                    email, sub.getPlan(), rupees);
+            // Use JSONObject to safely build the payload — avoids JSON injection from user-controlled fields.
+            JSONObject msgJson = new JSONObject();
+            msgJson.put("to", email);
+            msgJson.put("purpose", "subscription_confirmation");
+            msgJson.put("plan", sub.getPlan());
+            msgJson.put("amount", "₹" + rupees);
+            String msgPayload = msgJson.toString();
             try {
                 redis.convertAndSend("email:send", msgPayload);
                 log.info("Receipt email queued for user {}", sub.getUserId());
