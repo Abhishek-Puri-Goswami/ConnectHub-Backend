@@ -303,4 +303,182 @@ class RoomServiceTest {
         when(memberRepo.existsByRoomIdAndUserId("r1", 99)).thenReturn(false);
         assertFalse(svc.isMember("r1", 99));
     }
+
+    // ── updateLastRead ────────────────────────────────────────────────────────
+
+    @Test
+    void updateLastRead_memberFound_setsTimestamp() {
+        RoomMember member = RoomMember.builder().roomId("r1").userId(1).build();
+        when(memberRepo.findByRoomIdAndUserId("r1", 1)).thenReturn(Optional.of(member));
+        when(memberRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        svc.updateLastRead("r1", 1);
+
+        assertNotNull(member.getLastReadAt());
+        verify(memberRepo).save(member);
+    }
+
+    @Test
+    void updateLastRead_memberNotFound_noOp() {
+        when(memberRepo.findByRoomIdAndUserId("r1", 99)).thenReturn(Optional.empty());
+
+        assertDoesNotThrow(() -> svc.updateLastRead("r1", 99));
+        verify(memberRepo, never()).save(any());
+    }
+
+    // ── updateLastMessageAt ───────────────────────────────────────────────────
+
+    @Test
+    void updateLastMessageAt_roomFound_updatesPreviewAndSender() {
+        Room room = Room.builder().roomId("r1").build();
+        when(roomRepo.findByRoomId("r1")).thenReturn(Optional.of(room));
+        when(roomRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        svc.updateLastMessageAt("r1", "Hello!", 42);
+
+        assertNotNull(room.getLastMessageAt());
+        assertEquals("Hello!", room.getLastMessagePreview());
+        assertEquals(42, room.getLastMessageSenderId());
+    }
+
+    @Test
+    void updateLastMessageAt_previewTruncatedAt200() {
+        Room room = Room.builder().roomId("r1").build();
+        when(roomRepo.findByRoomId("r1")).thenReturn(Optional.of(room));
+        when(roomRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+        String longPreview = "a".repeat(250);
+
+        svc.updateLastMessageAt("r1", longPreview, 1);
+
+        assertEquals(200, room.getLastMessagePreview().length());
+    }
+
+    // ── getAllRooms / getAllRoomsPaged / countActiveRooms ──────────────────────
+
+    @Test
+    void getAllRooms_returnsList() {
+        List<Room> rooms = List.of(Room.builder().roomId("r1").build());
+        when(roomRepo.findAll()).thenReturn(rooms);
+
+        assertEquals(1, svc.getAllRooms().size());
+    }
+
+    @Test
+    void countActiveRooms_delegatesToRepo() {
+        when(roomRepo.countActiveRooms()).thenReturn(7L);
+        assertEquals(7L, svc.countActiveRooms());
+    }
+
+    // ── searchRooms ───────────────────────────────────────────────────────────
+
+    @Test
+    void searchRooms_blankQuery_returnsEmpty() {
+        assertTrue(svc.searchRooms("   ").isEmpty());
+        verify(roomRepo, never()).searchPublicRooms(any());
+    }
+
+    @Test
+    void searchRooms_nullQuery_returnsEmpty() {
+        assertTrue(svc.searchRooms(null).isEmpty());
+    }
+
+    @Test
+    void searchRooms_validQuery_delegatesToRepo() {
+        List<Room> results = List.of(Room.builder().roomId("r1").name("Java Chat").build());
+        when(roomRepo.searchPublicRooms("java")).thenReturn(results);
+
+        assertEquals(1, svc.searchRooms("java").size());
+    }
+
+    // ── generateInviteCode ────────────────────────────────────────────────────
+
+    @Test
+    void generateInviteCode_success_returnsCode() {
+        Room room = Room.builder().roomId("r1").type("GROUP").createdById(1).build();
+        when(roomRepo.findByRoomId("r1")).thenReturn(Optional.of(room));
+        when(roomRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        String code = svc.generateInviteCode("r1", 1);
+
+        assertNotNull(code);
+        assertEquals(8, code.length());
+        assertEquals(code, room.getInviteCode());
+    }
+
+    @Test
+    void generateInviteCode_notCreator_throws403() {
+        Room room = Room.builder().roomId("r1").type("GROUP").createdById(1).build();
+        when(roomRepo.findByRoomId("r1")).thenReturn(Optional.of(room));
+
+        assertThrows(ForbiddenException.class, () -> svc.generateInviteCode("r1", 99));
+    }
+
+    @Test
+    void generateInviteCode_dmRoom_throws400() {
+        Room room = Room.builder().roomId("r1").type("DM").createdById(1).build();
+        when(roomRepo.findByRoomId("r1")).thenReturn(Optional.of(room));
+
+        assertThrows(BadRequestException.class, () -> svc.generateInviteCode("r1", 1));
+    }
+
+    // ── joinByInviteCode ──────────────────────────────────────────────────────
+
+    @Test
+    void joinByInviteCode_newMember_addsAndReturns() {
+        Room room = Room.builder().roomId("r1").type("GROUP").createdById(1)
+                .name("Room").maxMembers(10).build();
+        when(roomRepo.findByInviteCode("CODE123")).thenReturn(Optional.of(room));
+        when(memberRepo.existsByRoomIdAndUserId("r1", 5)).thenReturn(false);
+        // addMember internally calls roomRepo.findByRoomId again
+        when(roomRepo.findByRoomId("r1")).thenReturn(Optional.of(room));
+        when(memberRepo.countByRoomId("r1")).thenReturn(1);
+        RoomMember saved = RoomMember.builder().roomId("r1").userId(5).role("MEMBER").build();
+        when(memberRepo.save(any())).thenReturn(saved);
+
+        RoomMember result = svc.joinByInviteCode("CODE123", 5);
+
+        assertEquals(5, result.getUserId());
+    }
+
+    @Test
+    void joinByInviteCode_alreadyMember_returnsExisting() {
+        Room room = Room.builder().roomId("r1").build();
+        when(roomRepo.findByInviteCode("CODE123")).thenReturn(Optional.of(room));
+        when(memberRepo.existsByRoomIdAndUserId("r1", 5)).thenReturn(true);
+        RoomMember existing = RoomMember.builder().roomId("r1").userId(5).build();
+        when(memberRepo.findByRoomIdAndUserId("r1", 5)).thenReturn(Optional.of(existing));
+
+        RoomMember result = svc.joinByInviteCode("CODE123", 5);
+
+        assertEquals(5, result.getUserId());
+        verify(memberRepo, never()).save(any());
+    }
+
+    @Test
+    void joinByInviteCode_invalidCode_throws() {
+        when(roomRepo.findByInviteCode("INVALID")).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> svc.joinByInviteCode("INVALID", 5));
+    }
+
+    // ── revokeInviteCode ──────────────────────────────────────────────────────
+
+    @Test
+    void revokeInviteCode_byCreator_clearsCode() {
+        Room room = Room.builder().roomId("r1").createdById(1).inviteCode("CODE123").build();
+        when(roomRepo.findByRoomId("r1")).thenReturn(Optional.of(room));
+        when(roomRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        svc.revokeInviteCode("r1", 1);
+
+        assertNull(room.getInviteCode());
+    }
+
+    @Test
+    void revokeInviteCode_notCreator_throws403() {
+        Room room = Room.builder().roomId("r1").createdById(1).build();
+        when(roomRepo.findByRoomId("r1")).thenReturn(Optional.of(room));
+
+        assertThrows(ForbiddenException.class, () -> svc.revokeInviteCode("r1", 99));
+    }
 }

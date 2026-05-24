@@ -232,4 +232,62 @@ class MessageServiceTest {
         when(msgRepo.countByRoomIdAndIsDeletedFalse("r1")).thenReturn(42L);
         assertEquals(42L, svc.unreadCount("r1", null));
     }
+
+    // ── send — rate limit & reply validation ──────────────────────────────────
+
+    @Test
+    void send_rateLimitExceeded_throwsTooManyRequests() {
+        when(messageTierRateLimiter.tryAcquire(eq("1"), anyString())).thenReturn(false);
+        Message m = Message.builder().roomId("r1").senderId(1).content("hi").type("TEXT").build();
+
+        assertThrows(com.connecthub.message.exception.TooManyRequestsException.class,
+                () -> svc.send(m, "FREE"));
+        verify(msgRepo, never()).save(any());
+    }
+
+    @Test
+    void send_nullSenderId_skipsRateLimit() {
+        // System messages (senderId == null) bypass rate limiting
+        Message m = Message.builder().roomId("r1").content("system message").type("SYSTEM").build();
+        when(msgRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        assertDoesNotThrow(() -> svc.send(m, "FREE"));
+        verify(messageTierRateLimiter, never()).tryAcquire(any(), any());
+    }
+
+    @Test
+    void send_replyTargetNotFound_throwsBadRequest() {
+        when(messageTierRateLimiter.tryAcquire(anyString(), anyString())).thenReturn(true);
+        Message m = Message.builder().roomId("r1").senderId(1).content("reply").type("TEXT")
+                .replyToMessageId("nonexistent").build();
+        when(msgRepo.findByMessageIdAndRoomId("nonexistent", "r1")).thenReturn(Optional.empty());
+
+        assertThrows(com.connecthub.message.exception.BadRequestException.class,
+                () -> svc.send(m, "FREE"));
+    }
+
+    // ── countToday ────────────────────────────────────────────────────────────
+
+    @Test
+    void countToday_delegatesToRepo() {
+        when(msgRepo.countByIsDeletedFalseAndSentAtAfter(any(LocalDateTime.class))).thenReturn(37L);
+
+        assertEquals(37L, svc.countToday());
+    }
+
+    // ── getMessages — deleted message redaction ────────────────────────────────
+
+    @Test
+    void getMessages_deletedMessage_redactsContentAndMedia() {
+        Message deleted = Message.builder()
+                .messageId("m1").roomId("r1")
+                .content("secret").mediaUrl("http://s3/img.jpg").isDeleted(true).build();
+        when(msgRepo.findByRoomIdOrderBySentAtDesc(eq("r1"), any(Pageable.class)))
+                .thenReturn(List.of(deleted));
+
+        List<Message> result = svc.getMessages("r1", null, 50);
+
+        assertNull(result.get(0).getContent());
+        assertNull(result.get(0).getMediaUrl());
+    }
 }
