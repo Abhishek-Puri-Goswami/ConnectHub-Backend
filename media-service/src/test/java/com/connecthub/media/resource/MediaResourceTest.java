@@ -30,7 +30,7 @@ class MediaResourceTest {
 
     @BeforeEach
     void setUp() {
-        when(roomServiceClient.isMember(anyString(), anyInt())).thenReturn(true);
+        lenient().when(roomServiceClient.isMember(anyString(), anyInt())).thenReturn(true);
     }
 
     @Test

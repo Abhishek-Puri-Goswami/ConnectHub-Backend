@@ -150,7 +150,6 @@ class MediaServiceTest {
     void upload_nullContentType_throws() {
         MockMultipartFile file = new MockMultipartFile("file", "f.bin", null, "data".getBytes());
         when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
-        when(repo.sumSizeKbByUploaderId(1)).thenReturn(0L);
 
         assertThrows(RuntimeException.class,
                 () -> mediaService.upload(file, 1, "room1", "FREE"));
