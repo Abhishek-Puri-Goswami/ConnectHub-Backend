@@ -59,7 +59,7 @@ class GlobalExceptionHandlerTest {
         // Fix #3: The fallback RuntimeException handler now returns 500 (not 400).
         // Previously all RuntimeExceptions returned 400, masking real server errors.
         var ex = new RuntimeException("Unexpected internal failure");
-        var resp = handler.handle(ex);
+        var resp = handler.handleRuntime(ex);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(resp.getBody()).containsEntry("error", "Unexpected internal failure");
