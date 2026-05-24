@@ -16,30 +16,41 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Subscription management endpoints.
- * All routes require authentication (JWT via X-User-Id header injected by
- * gateway).
+ * Handles all subscription and payment endpoints for ConnectHub plans.
+ *
+ * All routes sit behind the API Gateway which validates the JWT and injects
+ * the caller's identity as X-User-Id and X-User-Email headers. The controller
+ * reads those headers instead of parsing the token itself.
+ *
+ * Base path: /api/v1/payments/subscription
  */
+// Handles HTTP requests and writes the return value directly as JSON (no view layer)
 @RestController
+// All methods in this class share this URL prefix
 @RequestMapping("/api/v1/payments/subscription")
+// Lombok: generates a constructor that injects all final fields
 @RequiredArgsConstructor
+// Lombok: injects a `log` field for SLF4J logging
 @Slf4j
+// Swagger: groups these endpoints under the "Subscription" section in API docs
 @Tag(name = "Subscription", description = "Manage ConnectHub PRO subscriptions via Razorpay")
 public class SubscriptionController {
 
     private final SubscriptionService subscriptionService;
 
     /**
-     * Creates (or returns existing) one-time Razorpay order for the calling user.
-     * The returned razorpayOrderId is passed to Razorpay Checkout on the frontend.
-     * Accepts a plan field in the body: "PREMIUM" (₹100/mo) or "PLATINUM" (₹149/mo).
+     * Creates a Razorpay order for the calling user (or returns an existing active plan).
+     * The returned razorpayOrderId is passed directly to Razorpay Checkout on the frontend.
+     * Accepts a plan field: "PREMIUM" (₹100/mo) or "PLATINUM" (₹149/mo).
      */
+    // Handles POST /api/v1/payments/subscription/create
     @PostMapping("/create")
+    // Swagger: describes this endpoint in the generated API documentation
     @Operation(summary = "Create payment order", description = "Initiates a one-time Razorpay order for the authenticated user")
     public ResponseEntity<SubscriptionResponse> createSubscription(
-            @RequestHeader("X-User-Id") Integer userId,
+            @RequestHeader("X-User-Id") Integer userId,           // injected by API Gateway from JWT
             @RequestHeader(value = "X-User-Email", required = false) String userEmail,
-            @Valid @RequestBody CreateSubscriptionRequest req) {
+            @Valid @RequestBody CreateSubscriptionRequest req) {   // @Valid triggers bean validation on the request body
 
         req.setUserId(userId);
         String plan = req.getPlan() != null ? req.getPlan().toUpperCase() : "PREMIUM";
@@ -48,14 +59,15 @@ public class SubscriptionController {
     }
 
     /**
-     * Verifies a completed Razorpay payment using the signature returned by the checkout widget
-     * and immediately activates the subscription.  Called by the frontend in the Razorpay
-     * handler callback — this is the reliable activation path that does not depend on webhooks.
+     * Verifies the Razorpay payment signature and activates the subscription immediately.
+     * Called by the frontend right after a successful checkout — this is the primary
+     * activation path and does not depend on Razorpay webhooks being delivered.
      */
+    // Handles POST /api/v1/payments/subscription/verify
     @PostMapping("/verify")
     @Operation(summary = "Verify payment and activate subscription")
     public ResponseEntity<SubscriptionResponse> verifyPayment(
-            @RequestHeader("X-User-Id") Integer userId,
+            @RequestHeader("X-User-Id") Integer userId,            // injected by API Gateway from JWT
             @RequestBody java.util.Map<String, String> body) {
         String paymentId = body.get("razorpay_payment_id");
         String orderId   = body.get("razorpay_order_id");
@@ -68,9 +80,9 @@ public class SubscriptionController {
     }
 
     /**
-     * Cancels the calling user's active subscription at end of current billing period.
-     * The user retains access until endDate.
+     * Cancels the subscription — the user keeps access until the current period ends.
      */
+    // Handles POST /api/v1/payments/subscription/cancel
     @PostMapping("/cancel")
     @Operation(summary = "Cancel subscription")
     public ResponseEntity<Void> cancelSubscription(
@@ -79,18 +91,16 @@ public class SubscriptionController {
         return ResponseEntity.ok().build();
     }
 
-    /**
-     * Returns frontend checkout config (Razorpay key + amount in paise).
-     */
+    /** Returns the Razorpay public key and plan amounts needed to open the checkout widget. */
+    // Handles GET /api/v1/payments/subscription/config
     @GetMapping("/config")
     @Operation(summary = "Get checkout config")
     public ResponseEntity<Map<String, Object>> getConfig() {
         return ResponseEntity.ok(subscriptionService.getConfig());
     }
 
-    /**
-     * Returns the current subscription status for the calling user.
-     */
+    /** Returns the current plan and subscription status for the calling user. */
+    // Handles GET /api/v1/payments/subscription/status
     @GetMapping("/status")
     @Operation(summary = "Get subscription status")
     public ResponseEntity<SubscriptionResponse> getStatus(
@@ -100,9 +110,8 @@ public class SubscriptionController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    /**
-     * Returns payment history for the calling user's subscription.
-     */
+    /** Returns all recorded payment transactions for the calling user. */
+    // Handles GET /api/v1/payments/subscription/payments
     @GetMapping("/payments")
     @Operation(summary = "Get payment history")
     public ResponseEntity<List<PaymentResponse>> getPaymentHistory(

@@ -22,10 +22,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-@SuppressWarnings("null")
+// Marks this as a Spring-managed service bean
 @Service
+// Lombok: generates a constructor that injects all final fields automatically
 @RequiredArgsConstructor
+// Lombok: injects a `log` field for SLF4J logging
 @Slf4j
+// Wraps every public method in a database transaction by default
 @Transactional
 public class SubscriptionService {
 
@@ -35,30 +38,30 @@ public class SubscriptionService {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final StringRedisTemplate redis;
 
-    @Value("${razorpay.key-id}")
+    @Value("${razorpay.key-id}")       // Razorpay public key — sent to frontend for checkout
     private String razorpayKeyId;
 
-    @Value("${razorpay.key-secret}")
+    @Value("${razorpay.key-secret}")   // Razorpay secret — used server-side to verify payment signatures
     private String razorpayKeySecret;
 
-    @Value("${payment.premium.amount-paise:10000}")
+    @Value("${payment.premium.amount-paise:10000}")   // ₹100 = 10000 paise (default)
     private long premiumAmountPaise;
 
-    @Value("${payment.platinum.amount-paise:14900}")
+    @Value("${payment.platinum.amount-paise:14900}")  // ₹149 = 14900 paise (default)
     private long platinumAmountPaise;
 
     /** Duration of a paid subscription in months. */
     private static final int SUBSCRIPTION_MONTHS = 1;
 
     /**
-     * createOrder — creates a Razorpay Order for a PREMIUM or PLATINUM upgrade payment.
+     * Creates a Razorpay Order so the frontend can open the payment widget.
      *
-     * Flow:
-     *   1. Normalize the plan to PREMIUM or PLATINUM (defaults to PREMIUM for unknown values).
-     *   2. If the user already has an ACTIVE paid plan that hasn't expired, return existing.
-     *   3. Create a Razorpay Order with the tier-specific amount (paise).
-     *   4. Persist a local Subscription row with status=PENDING, the plan, and the order ID.
-     *   5. Return the order ID to the frontend to open the Razorpay widget.
+     * Steps:
+     *   1. Normalize the plan to PREMIUM or PLATINUM (unknown values default to PREMIUM).
+     *   2. If the user already has an active, unexpired plan, return it as-is.
+     *   3. Call Razorpay API to create an order with the correct amount in paise.
+     *   4. Save a local Subscription row (status=PENDING) linked to the Razorpay order ID.
+     *   5. Return the order ID — the frontend passes this to Razorpay Checkout.
      */
     public SubscriptionResponse createOrder(Integer userId, String userEmail, String requestedPlan) {
         // Normalize to valid tier — unknown values default to PREMIUM
@@ -110,14 +113,13 @@ public class SubscriptionService {
     }
 
     /**
-     * verifyAndActivate — verifies a completed Razorpay payment using the frontend-supplied
-     * signature and activates the plan immediately.
+     * Verifies a completed payment and activates the subscription immediately.
      *
-     * The Razorpay checkout handler fires on the client with:
+     * After the user pays, Razorpay Checkout calls our frontend handler with:
      *   { razorpay_payment_id, razorpay_order_id, razorpay_signature }
-     * The signature = HMAC-SHA256(orderId + "|" + paymentId, keySecret).
-     * We verify this here and activate the subscription, making the flow independent of
-     * webhook delivery.
+     * The signature is HMAC-SHA256(orderId + "|" + paymentId, keySecret).
+     * We verify that signature here before trusting the payment. This path is the
+     * primary activation route — it does not depend on Razorpay webhooks being delivered.
      */
     public SubscriptionResponse verifyAndActivate(String razorpayPaymentId,
                                                    String razorpayOrderId,
@@ -306,14 +308,14 @@ public class SubscriptionService {
         });
     }
 
-    /** getSubscription — returns the user's current plan record, if any. */
-    @Transactional(readOnly = true)
+    /** Returns the user's current subscription record, if one exists. */
+    @Transactional(readOnly = true) // read-only — no writes
     public Optional<SubscriptionResponse> getSubscription(Integer userId) {
         return subscriptionRepo.findByUserId(userId).map(this::toResponse);
     }
 
-    /** getPaymentHistory — returns all payment transactions for a user, newest first. */
-    @Transactional(readOnly = true)
+    /** Returns all payment transactions for the user, newest first. */
+    @Transactional(readOnly = true) // read-only — no writes
     public List<PaymentResponse> getPaymentHistory(Integer userId) {
         return subscriptionRepo.findByUserId(userId)
                 .map(sub -> paymentRepo.findBySubscriptionIdOrderByCreatedAtDesc(sub.getId())
@@ -321,8 +323,8 @@ public class SubscriptionService {
                 .orElse(List.of());
     }
 
-    /** getConfig — returns the Razorpay key and tier-specific amounts for the frontend. */
-    @Transactional(readOnly = true)
+    /** Returns the Razorpay public key and plan amounts in paise for the frontend checkout widget. */
+    @Transactional(readOnly = true) // read-only — no writes
     public Map<String, Object> getConfig() {
         Map<String, Object> config = new HashMap<>();
         config.put("razorpayKeyId", razorpayKeyId);
@@ -332,15 +334,12 @@ public class SubscriptionService {
     }
 
     /**
-     * publishSubscriptionEvent — sends a valid JSON Kafka message so auth-service
-     * can update the user's subscriptionTier in the database and JWT claims.
-     *
-     * Previously this used HashMap.toString() which produces {key=value} — NOT valid
-     * JSON — causing auth-service's ObjectMapper.readValue() to throw JsonParseException
-     * and silently drop every subscription update.
+     * Sends a Kafka message so auth-service can update the user's subscription tier.
+     * The message is a plain JSON string. String.format() is used intentionally here
+     * because both values are controlled (integer userId, uppercase plan name), so
+     * there is no injection risk and no ObjectMapper dependency is needed.
      */
     private void publishSubscriptionEvent(Integer userId, String plan) {
-        // Build valid JSON manually — avoids ObjectMapper dependency and is unambiguous
         String json = String.format("{\"userId\":%d,\"status\":\"%s\"}", userId, plan);
         kafkaTemplate.send("user.subscription.status", String.valueOf(userId), json);
         log.debug("Published subscription event userId={} plan={}", userId, plan);

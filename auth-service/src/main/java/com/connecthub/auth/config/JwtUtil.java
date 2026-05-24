@@ -13,76 +13,74 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * JwtUtil — JSON Web Token Generation and Validation Utility
+ * JwtUtil — creates, signs, and reads JWT tokens for the auth-service.
  *
- * PURPOSE:
- *   Centralizes all JWT operations for the auth-service. It is the single place
- *   where tokens are created, parsed, and validated. All other services in the
- *   architecture receive tokens from the frontend and validate them at the gateway,
- *   but only the auth-service issues tokens — using this class.
+ * Only the auth-service ever issues tokens. All other services receive tokens
+ * from the frontend and the API Gateway validates them locally using the same
+ * shared secret — so no inter-service call is needed for token verification.
  *
- * TOKEN TYPES ISSUED:
+ * Three token types:
  *
- *   1. Access Token (generateAccessToken):
- *      - Short-lived (default 24 hours, configurable via jwt.access-token-expiry in ms)
- *      - Contains user identity claims: email, username, role, subscriptionTier
- *      - Subject ("sub") is the numeric userId as a string
- *      - The API gateway reads these claims and forwards them as X-User-* headers
+ *   Access token  — short-lived (default 24 h). Carries the user's identity:
+ *                   userId, email, username, role, subscriptionTier. The
+ *                   gateway reads these and forwards them as X-User-* headers.
  *
- *   2. Refresh Token (generateRefreshToken):
- *      - Long-lived (default 7 days, configurable via jwt.refresh-token-expiry in ms)
- *      - Contains only the user ID and a "type": "refresh" claim (no profile data)
- *      - Used by the frontend to request a new access token when it expires
- *      - The auth-service refreshToken endpoint issues a fresh access token in exchange
+ *   Refresh token — long-lived (default 7 days). Contains only userId and
+ *                   type="refresh". The auth-service /refresh endpoint accepts
+ *                   this and issues a fresh access token from the current DB
+ *                   state, so role/tier changes are reflected on next refresh.
  *
- *   3. Reset Token (generateResetToken):
- *      - Very short-lived (hardcoded 15 minutes — 900000ms)
- *      - Contains a "purpose": "PASSWORD_RESET" claim for additional validation
- *      - Issued after a user successfully verifies their password-reset OTP
- *      - Passed back to the resetPassword endpoint to authorize the password change
- *      - Using a JWT here means no server-side state is needed for reset sessions
+ *   Reset token   — very short-lived (15 min). Contains purpose="PASSWORD_RESET"
+ *                   to prevent misuse as a regular access token. Avoids the need
+ *                   to store any server-side reset session state.
  *
- * KEY MANAGEMENT:
- *   The HMAC-SHA256 signing key is derived from a Base64-encoded secret stored in
- *   application.yml (jwt.secret). The same secret is configured in the API Gateway
- *   so both can verify tokens independently without contacting each other.
- *   The key() method decodes the Base64 string and wraps it in an HMAC key object.
+ * Signing key:
+ *   HMAC-SHA256, derived from a Base64-encoded secret in application.yml
+ *   (jwt.secret). The API Gateway uses the same secret so it can verify tokens
+ *   without calling auth-service.
  *
- * CLAIMS IN THE ACCESS TOKEN:
- *   - sub (subject)       — userId as a string (e.g., "42")
- *   - email               — user's email address
- *   - username            — user's username
- *   - role                — USER, ADMIN, PLATFORM_ADMIN
- *   - subscriptionTier    — FREE or PRO (used by gateway to set X-Subscription-Tier)
- *   - iat (issued at)     — Unix timestamp of token issuance
- *   - exp (expiry)        — Unix timestamp of token expiry
+ * Claims stored in the access token:
+ *   sub (subject)    — userId as a string, e.g. "42"
+ *   email            — user's email address
+ *   username         — user's username
+ *   role             — USER | ADMIN | PLATFORM_ADMIN
+ *   subscriptionTier — FREE | PREMIUM | PLATINUM
+ *   jti              — unique token ID (used to track sessions and blacklist tokens)
+ *   iat / exp        — issued-at and expiry as Unix timestamps
  */
+// Spring bean — allows this utility to be injected into any service or filter
 @Component
 public class JwtUtil {
 
+    // Reads jwt.secret from application.yml — the Base64-encoded signing key
     @Value("${jwt.secret}")
     private String jwtSecret;
 
-    /** Access token lifetime in milliseconds. Default 86400000 = 24 hours. */
+    // Access token lifetime in ms — default 86400000 = 24 hours
     @Value("${jwt.access-token-expiry:86400000}")
     private long accessExpiry;
 
-    /** Refresh token lifetime in milliseconds. Default 604800000 = 7 days. */
+    // Refresh token lifetime in ms — default 604800000 = 7 days
     @Value("${jwt.refresh-token-expiry:604800000}")
     private long refreshExpiry;
 
     /**
-     * key() — builds an HMAC-SHA signing key from the Base64-encoded secret.
-     * Called on every token operation; the key object is lightweight to create.
+     * Builds an HMAC-SHA signing key from the Base64-encoded secret.
+     * Called on every token operation — the key object is cheap to create each time.
      */
     private SecretKey key() {
         return Keys.hmacShaKeyFor(Base64.getDecoder().decode(jwtSecret));
     }
 
     /**
-     * generateAccessToken — creates a signed JWT containing the user's full identity.
-     * The subscriptionTier defaults to "FREE" if the user entity doesn't have one set
-     * (e.g., for users created before the tier field was added).
+     * Creates a signed JWT with the user's full identity claims.
+     *
+     * Role-based tier override: PLATFORM_ADMIN always gets PLATINUM, ADMIN always gets
+     * PREMIUM regardless of what is stored in the database. This ensures admin accounts
+     * always have their correct plan tier reflected in the token without manual DB changes.
+     *
+     * A random jti (JWT ID) is included so each token can be individually tracked and
+     * blacklisted on logout.
      */
     public String generateAccessToken(User user) {
         Map<String, Object> claims = new HashMap<>();
@@ -108,10 +106,10 @@ public class JwtUtil {
     }
 
     /**
-     * generateRefreshToken — creates a minimal long-lived token for session renewal.
-     * Intentionally contains only the user ID and type — no profile data.
-     * If the user's profile changes (e.g., role upgrade), the next access token
-     * generated from this refresh token will include the updated claims.
+     * Creates a minimal long-lived token used to get a new access token when it expires.
+     * Intentionally holds only the userId — no profile data. This means a fresh access
+     * token generated from this refresh token will always reflect the latest role and tier
+     * from the database.
      */
     public String generateRefreshToken(User user) {
         return Jwts.builder()
@@ -124,9 +122,9 @@ public class JwtUtil {
     }
 
     /**
-     * generateResetToken — creates a 15-minute token that authorizes a password reset.
-     * The "purpose" claim prevents this token from being used as a regular access token.
-     * The resetPassword endpoint checks this claim before allowing the password change.
+     * Creates a 15-minute token that authorizes a password reset.
+     * The "purpose" claim guards against using this token as a regular access token —
+     * the resetPassword endpoint verifies it before accepting the new password.
      */
     public String generateResetToken(int userId) {
         return Jwts.builder()
@@ -139,17 +137,17 @@ public class JwtUtil {
     }
 
     /**
-     * parseToken — parses and verifies a JWT string.
-     * Throws a JwtException subclass if the token is expired, malformed, or
-     * signed with a different key. Callers should catch JwtException.
+     * Parses and verifies a JWT string, returning its claims map.
+     * Throws JwtException (and subclasses) if the token is expired, malformed,
+     * or signed with a different key. Callers must catch JwtException.
      */
     public Claims parseToken(String token) {
         return Jwts.parser().verifyWith(key()).build().parseSignedClaims(token).getPayload();
     }
 
     /**
-     * isValid — returns true if the token can be parsed successfully.
-     * Used to check tokens without needing to handle exceptions at the call site.
+     * Returns true if the token passes signature and expiry checks.
+     * Lets callers test a token without having to catch exceptions themselves.
      */
     public boolean isValid(String token) {
         try {
@@ -160,18 +158,18 @@ public class JwtUtil {
         }
     }
 
-    /** getUserId — extracts the numeric user ID from the token's "sub" claim. */
+    /** Extracts the numeric userId from the token's "sub" (subject) claim. */
     public int getUserId(String token) {
         return Integer.parseInt(parseToken(token).getSubject());
     }
 
-    /** getAccessExpiry — exposes the configured access token lifetime (in ms). */
+    /** Returns the configured access token lifetime in milliseconds. */
     public long getAccessExpiry() {
         return accessExpiry;
     }
 
     /**
-     * extractClaim — generic claim extractor using a resolver function.
+     * Pulls a specific value from the token's claims using a resolver function.
      * Example: extractClaim(token, c -> c.get("jti", String.class))
      */
     public <T> T extractClaim(String token, java.util.function.Function<Claims, T> resolver) {
