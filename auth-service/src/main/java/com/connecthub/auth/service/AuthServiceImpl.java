@@ -615,8 +615,10 @@ public class AuthServiceImpl implements AuthService {
         User u = getUserById(userId);
         String normalized = role.toUpperCase();
         u.setRole(normalized);
-        if ("ADMIN".equals(normalized) || "PLATFORM_ADMIN".equals(normalized)) {
-            u.setSubscriptionTier("PRO");
+        if ("PLATFORM_ADMIN".equals(normalized)) {
+            u.setSubscriptionTier("PLATINUM");
+        } else if ("ADMIN".equals(normalized)) {
+            u.setSubscriptionTier("PREMIUM");
         } else if ("USER".equals(normalized)) {
             u.setSubscriptionTier("FREE");
         }
@@ -679,13 +681,23 @@ public class AuthServiceImpl implements AuthService {
      * toProfileDto — converts a User entity to the public-facing UserProfileDto.
      * Defaults subscriptionTier to "FREE" if the entity field is null.
      */
+    private String resolvedTier(User u) {
+        String role = u.getRole() != null ? u.getRole().toUpperCase() : "USER";
+        if ("PLATFORM_ADMIN".equals(role)) return "PLATINUM";
+        if ("ADMIN".equals(role)) {
+            String t = u.getSubscriptionTier();
+            return (t != null && !"FREE".equals(t)) ? t : "PREMIUM";
+        }
+        return u.getSubscriptionTier() != null ? u.getSubscriptionTier() : "FREE";
+    }
+
     private UserProfileDto toProfileDto(User u) {
         return UserProfileDto.builder()
                 .userId(u.getUserId()).username(u.getUsername()).email(u.getEmail())
                 .fullName(u.getFullName()).phoneNumber(u.getPhoneNumber())
                 .avatarUrl(u.getAvatarUrl()).bio(u.getBio()).status(u.getStatus())
                 .role(u.getRole())
-                .subscriptionTier(u.getSubscriptionTier() != null ? u.getSubscriptionTier() : "FREE")
+                .subscriptionTier(resolvedTier(u))
                 .emailVerified(u.isEmailVerified())
                 .phoneVerified(u.isPhoneVerified()).lastSeenAt(u.getLastSeenAt())
                 .createdAt(u.getCreatedAt()).build();
@@ -738,7 +750,7 @@ public class AuthServiceImpl implements AuthService {
                         .fullName(user.getFullName()).avatarUrl(user.getAvatarUrl())
                         .phoneNumber(user.getPhoneNumber())
                         .status(user.getStatus()).role(user.getRole())
-                        .subscriptionTier(user.getSubscriptionTier() != null ? user.getSubscriptionTier() : "FREE")
+                        .subscriptionTier(resolvedTier(user))
                         .active(user.isActive())
                         .build())
                 .build();

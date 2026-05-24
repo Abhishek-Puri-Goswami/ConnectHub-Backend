@@ -38,6 +38,9 @@ public class SubscriptionService {
     @Value("${razorpay.key-id}")
     private String razorpayKeyId;
 
+    @Value("${razorpay.key-secret}")
+    private String razorpayKeySecret;
+
     @Value("${payment.premium.amount-paise:10000}")
     private long premiumAmountPaise;
 
@@ -104,6 +107,60 @@ public class SubscriptionService {
             log.error("Failed to create Razorpay order for user {}: {}", userId, e.getMessage());
             throw new RuntimeException("Could not create payment order: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * verifyAndActivate — verifies a completed Razorpay payment using the frontend-supplied
+     * signature and activates the plan immediately.
+     *
+     * The Razorpay checkout handler fires on the client with:
+     *   { razorpay_payment_id, razorpay_order_id, razorpay_signature }
+     * The signature = HMAC-SHA256(orderId + "|" + paymentId, keySecret).
+     * We verify this here and activate the subscription, making the flow independent of
+     * webhook delivery.
+     */
+    public SubscriptionResponse verifyAndActivate(String razorpayPaymentId,
+                                                   String razorpayOrderId,
+                                                   String signature) {
+        // Verify Razorpay payment signature
+        try {
+            JSONObject attributes = new JSONObject();
+            attributes.put("razorpay_order_id", razorpayOrderId);
+            attributes.put("razorpay_payment_id", razorpayPaymentId);
+            attributes.put("razorpay_signature", signature);
+            boolean valid = com.razorpay.Utils.verifyPaymentSignature(attributes, razorpayKeySecret);
+            if (!valid) throw new RuntimeException("Invalid payment signature");
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Payment signature verification failed: {}", e.getMessage());
+            throw new RuntimeException("Payment verification failed: " + e.getMessage());
+        }
+
+        Subscription sub = subscriptionRepo.findByRazorpayOrderId(razorpayOrderId)
+                .orElseThrow(() -> new RuntimeException("Order not found: " + razorpayOrderId));
+
+        // Idempotent — skip if already activated
+        if ("ACTIVE".equalsIgnoreCase(sub.getStatus())) {
+            log.debug("Order {} already active — skipping re-activation", razorpayOrderId);
+            return toResponse(sub);
+        }
+
+        // Record payment if not already saved by webhook
+        if (paymentRepo.findByRazorpayPaymentId(razorpayPaymentId).isEmpty()) {
+            paymentRepo.save(Payment.builder()
+                    .subscriptionId(sub.getId())
+                    .razorpayPaymentId(razorpayPaymentId)
+                    .razorpayOrderId(razorpayOrderId)
+                    .amount(BigDecimal.ZERO)
+                    .currency("INR")
+                    .status("CAPTURED")
+                    .build());
+        }
+
+        activatePlan(sub);
+        log.info("Plan activated via frontend verify for order {}", razorpayOrderId);
+        return toResponse(sub);
     }
 
     /**

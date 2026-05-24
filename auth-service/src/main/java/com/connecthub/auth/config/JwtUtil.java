@@ -89,8 +89,14 @@ public class JwtUtil {
         claims.put("email", user.getEmail());
         claims.put("username", user.getUsername());
         claims.put("role", user.getRole());
-        claims.put("subscriptionTier",
-                user.getSubscriptionTier() != null ? user.getSubscriptionTier() : "FREE");
+        String tier = user.getSubscriptionTier() != null ? user.getSubscriptionTier() : "FREE";
+        String role = user.getRole() != null ? user.getRole().toUpperCase() : "USER";
+        if ("PLATFORM_ADMIN".equals(role)) {
+            tier = "PLATINUM";
+        } else if ("ADMIN".equals(role) && !"PLATINUM".equals(tier)) {
+            tier = "PREMIUM";
+        }
+        claims.put("subscriptionTier", tier);
         claims.put("jti", java.util.UUID.randomUUID().toString());
         return Jwts.builder()
                 .subject(String.valueOf(user.getUserId()))

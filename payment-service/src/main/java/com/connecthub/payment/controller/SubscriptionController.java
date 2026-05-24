@@ -48,6 +48,26 @@ public class SubscriptionController {
     }
 
     /**
+     * Verifies a completed Razorpay payment using the signature returned by the checkout widget
+     * and immediately activates the subscription.  Called by the frontend in the Razorpay
+     * handler callback — this is the reliable activation path that does not depend on webhooks.
+     */
+    @PostMapping("/verify")
+    @Operation(summary = "Verify payment and activate subscription")
+    public ResponseEntity<SubscriptionResponse> verifyPayment(
+            @RequestHeader("X-User-Id") Integer userId,
+            @RequestBody java.util.Map<String, String> body) {
+        String paymentId = body.get("razorpay_payment_id");
+        String orderId   = body.get("razorpay_order_id");
+        String signature = body.get("razorpay_signature");
+        if (paymentId == null || orderId == null || signature == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        SubscriptionResponse response = subscriptionService.verifyAndActivate(paymentId, orderId, signature);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * Cancels the calling user's active subscription at end of current billing period.
      * The user retains access until endDate.
      */
