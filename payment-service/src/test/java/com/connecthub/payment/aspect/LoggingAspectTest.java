@@ -1,5 +1,6 @@
 package com.connecthub.payment.aspect;
 
+import com.connecthub.common.aspect.LoggingAspect;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.Signature;
 import org.junit.jupiter.api.Test;

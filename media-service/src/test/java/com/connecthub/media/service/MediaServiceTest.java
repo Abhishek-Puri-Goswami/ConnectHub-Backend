@@ -184,6 +184,29 @@ class MediaServiceTest {
         assertThat(result).isNotNull();
     }
 
+    @Test
+    void upload_withCloudfrontDomain_returnsCloudFrontUrl() throws IOException {
+        ReflectionTestUtils.setField(mediaService, "cloudfrontDomain", "cdn.example.com");
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "doc.txt", "text/plain", "hello".getBytes());
+        when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
+        when(repo.sumSizeKbByUploaderId(1)).thenReturn(0L);
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenReturn(PutObjectResponse.builder().build());
+        when(repo.save(any())).thenAnswer(inv -> {
+            MediaFile mf = inv.getArgument(0);
+            // URL built with CloudFront domain must start with https://cdn.example.com/
+            assertThat(mf.getUrl()).startsWith("https://cdn.example.com/");
+            return mf;
+        });
+
+        MediaFile result = mediaService.upload(file, 1, "room1", "FREE");
+
+        assertThat(result).isNotNull();
+        // Reset field so it doesn't leak into other tests
+        ReflectionTestUtils.setField(mediaService, "cloudfrontDomain", "");
+    }
+
     // ── getById ─────────────────────────────────────────────────────────────
 
     @Test

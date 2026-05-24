@@ -134,6 +134,7 @@ public class AdminResource {
             @RequestHeader(value = "X-User-Role", defaultValue = "") String role,
             @Valid @RequestBody AnnouncementDto req) {
         if (!role.equals("ADMIN") && !role.equals("PLATFORM_ADMIN")) return ResponseEntity.status(403).build();
+        if (req.getContent() == null || req.getContent().isBlank()) return ResponseEntity.badRequest().build();
         User admin = authService.getUserById(adminId);
         Announcement saved = announcementRepository.save(Announcement.builder()
                 .title(req.getTitle())

@@ -57,6 +57,20 @@ class SubscriptionControllerTest {
     }
 
     @Test
+    void createOrder_nullPlan_defaultsToPremium() {
+        // When req.getPlan() is null the controller must default to "PREMIUM"
+        SubscriptionResponse sr = SubscriptionResponse.builder().plan("PREMIUM").build();
+        when(subscriptionService.createOrder(1, null, "PREMIUM")).thenReturn(sr);
+
+        CreateSubscriptionRequest req = new CreateSubscriptionRequest();
+        req.setPlan(null); // explicitly null
+        ResponseEntity<SubscriptionResponse> res = subscriptionController.createSubscription(1, null, req);
+
+        assertEquals(HttpStatus.OK, res.getStatusCode());
+        verify(subscriptionService).createOrder(eq(1), eq(null), eq("PREMIUM"));
+    }
+
+    @Test
     void cancelSubscription_returnsOk() {
         doNothing().when(subscriptionService).cancelSubscription(1);
 

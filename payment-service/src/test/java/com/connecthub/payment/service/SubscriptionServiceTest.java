@@ -214,6 +214,85 @@ class SubscriptionServiceTest {
         verify(subscriptionRepo).save(any());
     }
 
+    // ── createOrder — brand-new user (no existing subscription) ──────────────
+
+    @Test
+    void createOrder_noExistingSubscription_createsNewOrder() throws Exception {
+        when(subscriptionRepo.findByUserId(2)).thenReturn(Optional.empty());
+
+        com.razorpay.Order rzpOrder = mock(com.razorpay.Order.class);
+        when(rzpOrder.get("id")).thenReturn("order_brand_new");
+        com.razorpay.OrderClient mockOrders = mock(com.razorpay.OrderClient.class);
+        razorpayClient.orders = mockOrders;
+        when(mockOrders.create(any(JSONObject.class))).thenReturn(rzpOrder);
+        when(subscriptionRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        SubscriptionResponse res = svc.createOrder(2, "new@test.com", "PREMIUM");
+
+        assertEquals("PENDING", res.getStatus());
+        verify(subscriptionRepo).save(any());
+    }
+
+    // ── activatePlan — legacy PRO plan normalised to PREMIUM ─────────────────
+
+    @Test
+    void activatePlan_proPlan_normalizedToPremium() {
+        // Arrange: captured webhook where subscription was stored with plan="PRO"
+        JSONObject payload = new JSONObject(
+                "{\"payment\":{\"entity\":{\"id\":\"pay_pro\",\"order_id\":\"order_pro\",\"amount\":10000,\"currency\":\"INR\"}}}");
+        Subscription proPlan = Subscription.builder()
+                .id(20L).userId(5).plan("PRO").status("PENDING").razorpayOrderId("order_pro").build();
+
+        when(paymentRepo.findByRazorpayPaymentId("pay_pro")).thenReturn(Optional.empty());
+        when(subscriptionRepo.findByRazorpayOrderId("order_pro")).thenReturn(Optional.of(proPlan));
+
+        svc.handleWebhookEvent("payment.captured", payload);
+
+        // PRO must be normalised to PREMIUM during activation
+        assertEquals("PREMIUM", proPlan.getPlan());
+        assertEquals("ACTIVE",  proPlan.getStatus());
+    }
+
+    // ── sendReceiptEmail — receipt queued when subscription found ─────────────
+
+    @Test
+    void sendReceiptEmail_queuesEmail_whenSubscriptionFound() {
+        JSONObject payload = new JSONObject(
+                "{\"payment\":{\"entity\":{\"id\":\"pay_r\",\"order_id\":\"order_r\",\"amount\":10000,\"currency\":\"INR\"}}}");
+        Subscription sub = Subscription.builder()
+                .id(30L).userId(3).plan("PREMIUM").status("PENDING")
+                .userEmail("receipt@test.com").razorpayOrderId("order_r").build();
+
+        when(paymentRepo.findByRazorpayPaymentId("pay_r")).thenReturn(Optional.empty());
+        when(subscriptionRepo.findByRazorpayOrderId("order_r")).thenReturn(Optional.of(sub));
+        // findById is called inside sendReceiptEmail
+        when(subscriptionRepo.findById(30L)).thenReturn(Optional.of(sub));
+
+        svc.handleWebhookEvent("payment.captured", payload);
+
+        verify(redis).convertAndSend(eq("email:send"), anyString());
+    }
+
+    // ── recordPayment — fallback to notes when no orderId matches ─────────────
+
+    @Test
+    void recordPayment_noOrderId_fallsBackToNotes() {
+        // Webhook entity with no order_id — must look up via notes.userId
+        JSONObject payload = new JSONObject(
+                "{\"payment\":{\"entity\":{\"id\":\"pay_n\",\"amount\":10000,\"currency\":\"INR\"," +
+                "\"notes\":{\"userId\":7,\"plan\":\"PREMIUM\"}}}}");
+        Subscription sub = Subscription.builder()
+                .id(40L).userId(7).plan("PENDING").status("PENDING").build();
+
+        when(paymentRepo.findByRazorpayPaymentId("pay_n")).thenReturn(Optional.empty());
+        when(subscriptionRepo.findByUserId(7)).thenReturn(Optional.of(sub));
+
+        svc.handleWebhookEvent("payment.failed", payload);
+
+        // payment saved with the sub's ID resolved via notes
+        verify(paymentRepo).save(argThat(p -> "FAILED".equals(p.getStatus()) && Long.valueOf(40L).equals(p.getSubscriptionId())));
+    }
+
     // ── cancelSubscription ────────────────────────────────────────────────────
 
     @Test

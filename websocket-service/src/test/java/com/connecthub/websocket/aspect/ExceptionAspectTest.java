@@ -1,5 +1,6 @@
 package com.connecthub.websocket.aspect;
 
+import com.connecthub.common.aspect.ExceptionAspect;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.Signature;
 import org.junit.jupiter.api.Test;

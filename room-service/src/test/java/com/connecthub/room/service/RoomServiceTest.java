@@ -287,6 +287,20 @@ class RoomServiceTest {
         assertEquals(2, svc.getMembers("r1").size());
     }
 
+    @Test
+    void getMembers_cacheHit_returnsCachedList() {
+        List<RoomMember> cached = List.of(
+            RoomMember.builder().roomId("r1").userId(1).role("ADMIN").build()
+        );
+        when(cacheService.getCachedMembers("r1")).thenReturn(cached); // cache hit
+
+        List<RoomMember> result = svc.getMembers("r1");
+
+        assertEquals(1, result.size());
+        // DB must never be queried on a cache hit
+        verify(memberRepo, never()).findByRoomId(any());
+    }
+
     // ── updateRole ───────────────────────────────────────────────────────────
 
     @Test

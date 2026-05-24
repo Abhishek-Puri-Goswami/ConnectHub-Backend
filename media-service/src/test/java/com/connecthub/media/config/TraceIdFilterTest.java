@@ -1,5 +1,6 @@
 package com.connecthub.media.config;
 
+import com.connecthub.common.config.TraceIdFilter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.AfterEach;
