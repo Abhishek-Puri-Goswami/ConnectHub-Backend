@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.KafkaHeaders;
@@ -64,7 +63,6 @@ import java.util.Map;
 public class KafkaMessageListener {
 
     private final MessageService messageService;
-    private final StringRedisTemplate redisTemplate;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ObjectMapper objectMapper;
 
@@ -97,7 +95,6 @@ public class KafkaMessageListener {
         Map<String, Object> payload = objectMapper.readValue(messageJson, Map.class);
         String roomId = (String) payload.get("roomId");
         Integer senderId = toInt(payload.get("senderId"));
-        String senderUsername = (String) payload.get("senderUsername");
         String subscriptionTier = (String) payload.get("subscriptionTier");
 
         if (senderId == null || roomId == null) {
@@ -139,20 +136,6 @@ public class KafkaMessageListener {
             log.warn("User {} hit tier message rate limit at {}[{}]@{}", senderId, topic, partition, offset);
             emitRateLimitRejection(senderId, roomId, ex.getLimit());
         }
-    }
-
-    /**
-     * emitRejection — publishes a general limit rejection event.
-     * websocket-service consumes "chat.messages.rejected" and forwards the
-     * userMessage string to the sender's personal STOMP error queue.
-     */
-    private void emitRejection(int senderId, String roomId, String userMessage) throws Exception {
-        Map<String, Object> rejection = new HashMap<>();
-        rejection.put("senderId", senderId);
-        rejection.put("roomId", roomId);
-        rejection.put("reason", "LIMIT_EXCEEDED");
-        rejection.put("message", userMessage);
-        kafkaTemplate.send(AppConstants.TOPIC_MESSAGES_REJECTED, objectMapper.writeValueAsString(rejection));
     }
 
     /**
