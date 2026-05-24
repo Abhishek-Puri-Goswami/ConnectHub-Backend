@@ -107,7 +107,7 @@ public class RoomService {
             long existing = roomRepo.countByCreatedByIdAndType(creatorId, ROOM_TYPE_GROUP);
             if (existing >= FREE_PLAN_MAX_GROUP_ROOMS) {
                 throw new ForbiddenException("Free plan allows up to " + FREE_PLAN_MAX_GROUP_ROOMS
-                        + " group chats. Upgrade to PRO for unlimited groups.");
+                        + " group chats. Upgrade to Premium for more groups.");
             }
         }
 
@@ -311,11 +311,13 @@ public class RoomService {
     /** getAllRooms — admin-only endpoint that returns all rooms in the system. */
     @Transactional(readOnly = true) public List<Room> getAllRooms() { return roomRepo.findAll(); }
 
-    /** getAllRoomsPaged — paginated version of getAllRooms for the admin dashboard rooms tab. */
+    /** getAllRoomsPaged — paginated version of getAllRooms for the admin dashboard rooms tab.
+     *  Each room is enriched with a live memberCount so the admin UI can display it. */
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<Room> getAllRoomsPaged(int page, int size) {
         return roomRepo.findAll(org.springframework.data.domain.PageRequest.of(page, size,
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")));
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")))
+                .map(r -> { r.setMemberCount(memberRepo.countByRoomId(r.getRoomId())); return r; });
     }
 
     /** countActiveRooms — count of rooms that have received at least one message. Used by admin analytics. */
@@ -370,13 +372,13 @@ public class RoomService {
     }
 
     /**
-     * isPaidTier — returns true if the subscription tier is PRO or BUSINESS.
+     * isPaidTier — returns true if the subscription tier is any paid plan.
      * Used to gate the group room creation limit — paid users bypass the FREE cap.
      */
     private boolean isPaidTier(String subscriptionTier) {
         if (subscriptionTier == null || subscriptionTier.isBlank()) return false;
         String t = subscriptionTier.trim().toUpperCase();
-        return "PRO".equals(t) || "BUSINESS".equals(t);
+        return "PRO".equals(t) || "PREMIUM".equals(t) || "PLATINUM".equals(t) || "BUSINESS".equals(t);
     }
 
     /**

@@ -24,4 +24,6 @@ public class Room {
     /** P2-13: Shareable invite code for joining a room without a direct invitation */
     @Column(length = 20, unique = true) private String inviteCode;
     @CreationTimestamp @Column(updatable = false) private LocalDateTime createdAt;
+    /** Not persisted — populated on-the-fly for admin dashboard responses */
+    @Transient private Integer memberCount;
 }

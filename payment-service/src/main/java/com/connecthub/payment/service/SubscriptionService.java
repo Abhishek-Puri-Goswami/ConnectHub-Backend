@@ -38,22 +38,30 @@ public class SubscriptionService {
     @Value("${razorpay.key-id}")
     private String razorpayKeyId;
 
-    @Value("${payment.pro.amount-paise}")
-    private long proAmountPaise;
+    @Value("${payment.premium.amount-paise:10000}")
+    private long premiumAmountPaise;
 
-    /** Duration of a Premium subscription in months. */
+    @Value("${payment.platinum.amount-paise:14900}")
+    private long platinumAmountPaise;
+
+    /** Duration of a paid subscription in months. */
     private static final int SUBSCRIPTION_MONTHS = 1;
 
     /**
-     * createOrder — creates a Razorpay Order for a one-time Premium upgrade payment.
+     * createOrder — creates a Razorpay Order for a PREMIUM or PLATINUM upgrade payment.
      *
      * Flow:
-     *   1. If the user already has an ACTIVE Premium plan that hasn't expired, return existing.
-     *   2. Create a Razorpay Order with the configured amount (paise).
-     *   3. Persist a local Subscription row with status=PENDING and the order ID.
-     *   4. Return the order ID to the frontend to open the Razorpay widget.
+     *   1. Normalize the plan to PREMIUM or PLATINUM (defaults to PREMIUM for unknown values).
+     *   2. If the user already has an ACTIVE paid plan that hasn't expired, return existing.
+     *   3. Create a Razorpay Order with the tier-specific amount (paise).
+     *   4. Persist a local Subscription row with status=PENDING, the plan, and the order ID.
+     *   5. Return the order ID to the frontend to open the Razorpay widget.
      */
-    public SubscriptionResponse createOrder(Integer userId, String userEmail) {
+    public SubscriptionResponse createOrder(Integer userId, String userEmail, String requestedPlan) {
+        // Normalize to valid tier — unknown values default to PREMIUM
+        String plan = "PLATINUM".equalsIgnoreCase(requestedPlan) ? "PLATINUM" : "PREMIUM";
+        long amountPaise = "PLATINUM".equals(plan) ? platinumAmountPaise : premiumAmountPaise;
+
         Optional<Subscription> existing = subscriptionRepo.findByUserId(userId);
         if (existing.isPresent()) {
             Subscription sub = existing.get();
@@ -61,18 +69,19 @@ public class SubscriptionService {
                     && !"FREE".equalsIgnoreCase(sub.getPlan())
                     && (sub.getEndDate() == null || sub.getEndDate().isAfter(LocalDateTime.now()));
             if (activeAndNotExpired) {
-                log.info("User {} already has an active Premium plan", userId);
+                log.info("User {} already has an active {} plan", userId, sub.getPlan());
                 return toResponse(sub);
             }
         }
 
         try {
             JSONObject options = new JSONObject();
-            options.put("amount", proAmountPaise);
+            options.put("amount", amountPaise);
             options.put("currency", "INR");
-            options.put("receipt", "connecthub_premium_" + userId);
+            options.put("receipt", "connecthub_" + plan.toLowerCase() + "_" + userId);
             JSONObject notes = new JSONObject();
             notes.put("userId", userId);
+            notes.put("plan", plan);
             options.put("notes", notes);
 
             com.razorpay.Order rzpOrder = razorpayClient.orders.create(options);
@@ -81,14 +90,14 @@ public class SubscriptionService {
             Subscription sub = existing.orElseGet(Subscription::new);
             sub.setUserId(userId);
             sub.setUserEmail(userEmail);
-            sub.setPlan("PRO");
+            sub.setPlan(plan);
             sub.setStatus("PENDING");
             sub.setRazorpayOrderId(rzpOrderId);
             sub.setStartDate(LocalDateTime.now());
             sub.setEndDate(null);
 
             sub = subscriptionRepo.save(sub);
-            log.info("Created Razorpay order {} for user {}", rzpOrderId, userId);
+            log.info("Created Razorpay order {} ({}) for user {}", rzpOrderId, plan, userId);
             return toResponse(sub);
 
         } catch (Exception e) {
@@ -134,6 +143,13 @@ public class SubscriptionService {
                 JSONObject notes = entity.optJSONObject("notes");
                 if (notes != null && notes.has("userId")) {
                     subOpt = subscriptionRepo.findByUserId(notes.getInt("userId"));
+                    // If the webhook notes carry the plan, update the subscription record
+                    if (subOpt.isPresent() && notes.has("plan")) {
+                        String notedPlan = notes.getString("plan");
+                        if ("PREMIUM".equals(notedPlan) || "PLATINUM".equals(notedPlan)) {
+                            subOpt.get().setPlan(notedPlan);
+                        }
+                    }
                 }
             }
 
@@ -160,18 +176,36 @@ public class SubscriptionService {
     }
 
     /**
-     * activatePlan — marks the subscription ACTIVE with a 1-month endDate,
-     * then publishes a Kafka event so auth-service updates the user's JWT tier claim.
+     * activatePlan — marks the subscription ACTIVE with a 1-month endDate.
+     * Preserves the plan tier (PREMIUM/PLATINUM) already stored on the subscription.
+     * Publishes a Kafka event so auth-service can update the user's JWT tier claim.
      */
     private void activatePlan(Subscription sub) {
+        // Normalize legacy "PRO" plan to "PREMIUM" for consistency
+        String plan = "PRO".equalsIgnoreCase(sub.getPlan()) ? "PREMIUM" : sub.getPlan();
         LocalDateTime now = LocalDateTime.now();
         sub.setStatus("ACTIVE");
-        sub.setPlan("PRO");
+        sub.setPlan(plan);
         sub.setStartDate(now);
         sub.setEndDate(now.plusMonths(SUBSCRIPTION_MONTHS));
         subscriptionRepo.save(sub);
-        publishSubscriptionEvent(sub.getUserId(), "PRO");
-        log.info("Premium plan activated for user {} — expires {}", sub.getUserId(), sub.getEndDate());
+        publishSubscriptionEvent(sub.getUserId(), plan);
+        log.info("{} plan activated for user {} — expires {}", plan, sub.getUserId(), sub.getEndDate());
+    }
+
+    /**
+     * cancelSubscription — cancels a user's paid subscription at end of current period.
+     * The user keeps access until endDate. Publishes a Kafka event for auth-service.
+     */
+    public void cancelSubscription(Integer userId) {
+        Subscription sub = subscriptionRepo.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("No subscription found for user " + userId));
+        if ("FREE".equalsIgnoreCase(sub.getPlan())) {
+            throw new RuntimeException("Free plan cannot be cancelled");
+        }
+        sub.setStatus("CANCELLED");
+        subscriptionRepo.save(sub);
+        log.info("Subscription cancelled for user {} — access until {}", userId, sub.getEndDate());
     }
 
     /**
@@ -226,12 +260,13 @@ public class SubscriptionService {
                 .orElse(List.of());
     }
 
-    /** getConfig — returns the Razorpay key and configured amount for the frontend. */
+    /** getConfig — returns the Razorpay key and tier-specific amounts for the frontend. */
     @Transactional(readOnly = true)
     public Map<String, Object> getConfig() {
         Map<String, Object> config = new HashMap<>();
         config.put("razorpayKeyId", razorpayKeyId);
-        config.put("amountPaise", proAmountPaise);
+        config.put("premiumAmountPaise", premiumAmountPaise);
+        config.put("platinumAmountPaise", platinumAmountPaise);
         return config;
     }
 

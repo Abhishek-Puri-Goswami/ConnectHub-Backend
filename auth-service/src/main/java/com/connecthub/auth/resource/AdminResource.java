@@ -130,7 +130,7 @@ public class AdminResource {
     @Operation(summary = "Create platform announcement")
     public ResponseEntity<AnnouncementDto> createAnnouncement(
             @RequestHeader("X-User-Id") int adminId,
-            @RequestHeader("X-User-Role") String role,
+            @RequestHeader(value = "X-User-Role", defaultValue = "") String role,
             @RequestBody AnnouncementDto req) {
         if (!role.equals("ADMIN") && !role.equals("PLATFORM_ADMIN")) return ResponseEntity.status(403).build();
         if (req.getContent() == null || req.getContent().isBlank()) return ResponseEntity.badRequest().build();

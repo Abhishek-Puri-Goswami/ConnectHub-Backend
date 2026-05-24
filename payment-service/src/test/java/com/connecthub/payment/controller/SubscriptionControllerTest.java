@@ -17,7 +17,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class SubscriptionControllerTest {
@@ -29,19 +30,48 @@ class SubscriptionControllerTest {
     private SubscriptionController subscriptionController;
 
     @Test
-    void createOrder_returnsOk() {
-        SubscriptionResponse sr = SubscriptionResponse.builder().build();
-        when(subscriptionService.createOrder(1, null)).thenReturn(sr);
+    void createOrder_premium_returnsOk() {
+        SubscriptionResponse sr = SubscriptionResponse.builder().plan("PREMIUM").build();
+        when(subscriptionService.createOrder(1, null, "PREMIUM")).thenReturn(sr);
 
-        ResponseEntity<SubscriptionResponse> res = subscriptionController.createSubscription(1, null, new CreateSubscriptionRequest());
+        CreateSubscriptionRequest req = new CreateSubscriptionRequest();
+        req.setPlan("PREMIUM");
+        ResponseEntity<SubscriptionResponse> res = subscriptionController.createSubscription(1, null, req);
 
         assertEquals(HttpStatus.OK, res.getStatusCode());
         assertEquals(sr, res.getBody());
+        verify(subscriptionService).createOrder(eq(1), eq(null), eq("PREMIUM"));
+    }
+
+    @Test
+    void createOrder_platinum_passesCorrectPlan() {
+        SubscriptionResponse sr = SubscriptionResponse.builder().plan("PLATINUM").build();
+        when(subscriptionService.createOrder(1, "u@example.com", "PLATINUM")).thenReturn(sr);
+
+        CreateSubscriptionRequest req = new CreateSubscriptionRequest();
+        req.setPlan("PLATINUM");
+        ResponseEntity<SubscriptionResponse> res = subscriptionController.createSubscription(1, "u@example.com", req);
+
+        assertEquals(HttpStatus.OK, res.getStatusCode());
+        verify(subscriptionService).createOrder(eq(1), eq("u@example.com"), eq("PLATINUM"));
+    }
+
+    @Test
+    void cancelSubscription_returnsOk() {
+        doNothing().when(subscriptionService).cancelSubscription(1);
+
+        ResponseEntity<Void> res = subscriptionController.cancelSubscription(1);
+
+        assertEquals(HttpStatus.OK, res.getStatusCode());
+        verify(subscriptionService).cancelSubscription(1);
     }
 
     @Test
     void getConfig_returnsOk() {
-        Map<String, Object> cfg = Map.of("razorpayKeyId", "key", "amountPaise", 9900L);
+        Map<String, Object> cfg = Map.of(
+                "razorpayKeyId", "key",
+                "premiumAmountPaise", 10000L,
+                "platinumAmountPaise", 14900L);
         when(subscriptionService.getConfig()).thenReturn(cfg);
 
         ResponseEntity<Map<String, Object>> res = subscriptionController.getConfig();

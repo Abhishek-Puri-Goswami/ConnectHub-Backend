@@ -153,7 +153,7 @@ public class MediaService {
                     ? (capKb / (1024L * 1024L)) + " GB"
                     : (capKb / 1024L) + " MB";
             throw new MediaStorageQuotaException(
-                    "Storage quota exceeded for your plan (limit " + capHuman + " total). Delete files or upgrade to PRO.");
+                    "Storage quota exceeded for your plan (limit " + capHuman + " total). Delete files or upgrade your plan.");
         }
         String contentType = file.getContentType();
         if (contentType == null || !ALLOWED.contains(contentType))

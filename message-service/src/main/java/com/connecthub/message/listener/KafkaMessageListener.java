@@ -149,7 +149,7 @@ public class KafkaMessageListener {
         rejection.put("roomId", roomId);
         rejection.put("reason", "RATE_LIMIT");
         rejection.put("limit", limit);
-        rejection.put("message", "You've reached your plan's messages per minute limit. Upgrade to PRO for a higher limit.");
+        rejection.put("message", "Your message was not sent — you've hit your plan's message rate limit. Upgrade your plan for a higher limit.");
         kafkaTemplate.send(AppConstants.TOPIC_MESSAGES_REJECTED, objectMapper.writeValueAsString(rejection));
     }
 

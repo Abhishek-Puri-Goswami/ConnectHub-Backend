@@ -33,8 +33,10 @@ razorpay:
   webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:connecthub_test_webhook_secret}
 
 payment:
-  pro:
-    amount-paise: ${PAYMENT_PRO_AMOUNT_PAISE:9900}
+  premium:
+    amount-paise: ${PAYMENT_PREMIUM_AMOUNT_PAISE:10000}
+  platinum:
+    amount-paise: ${PAYMENT_PLATINUM_AMOUNT_PAISE:14900}
 
 jwt:
   secret: ${JWT_SECRET}

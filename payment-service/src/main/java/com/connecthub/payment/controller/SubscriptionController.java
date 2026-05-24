@@ -32,6 +32,7 @@ public class SubscriptionController {
     /**
      * Creates (or returns existing) one-time Razorpay order for the calling user.
      * The returned razorpayOrderId is passed to Razorpay Checkout on the frontend.
+     * Accepts a plan field in the body: "PREMIUM" (₹100/mo) or "PLATINUM" (₹149/mo).
      */
     @PostMapping("/create")
     @Operation(summary = "Create payment order", description = "Initiates a one-time Razorpay order for the authenticated user")
@@ -41,8 +42,21 @@ public class SubscriptionController {
             @Valid @RequestBody CreateSubscriptionRequest req) {
 
         req.setUserId(userId);
-        SubscriptionResponse response = subscriptionService.createOrder(userId, userEmail);
+        String plan = req.getPlan() != null ? req.getPlan().toUpperCase() : "PREMIUM";
+        SubscriptionResponse response = subscriptionService.createOrder(userId, userEmail, plan);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Cancels the calling user's active subscription at end of current billing period.
+     * The user retains access until endDate.
+     */
+    @PostMapping("/cancel")
+    @Operation(summary = "Cancel subscription")
+    public ResponseEntity<Void> cancelSubscription(
+            @RequestHeader("X-User-Id") Integer userId) {
+        subscriptionService.cancelSubscription(userId);
+        return ResponseEntity.ok().build();
     }
 
     /**
