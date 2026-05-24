@@ -46,6 +46,7 @@ class MessagePersistenceServiceTest {
                 .thenThrow(new com.fasterxml.jackson.core.JsonProcessingException("err") {});
 
         service.persistMessage(p);  // must not propagate
+        verifyNoInteractions(kafkaTemplate);
     }
 
     @Test

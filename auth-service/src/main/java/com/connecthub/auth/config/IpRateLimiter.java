@@ -73,7 +73,7 @@ public class IpRateLimiter {
     private boolean checkLimit(String key, int limit, int windowSeconds) {
         Long count = redis.opsForValue().increment(key);
         if (count != null && count == 1) {
-            redis.expire(key, windowSeconds + 60, TimeUnit.SECONDS);
+            redis.expire(key, (long) windowSeconds + 60, TimeUnit.SECONDS);
         }
         return count != null && count <= limit;
     }

@@ -54,5 +54,6 @@ class KafkaRejectedMessageListenerTest {
     @Test
     void handleDlq_logsWithoutThrowing() {
         listener.handleDlq("{}", "chat.messages.rejected.dlq", 0L);
+        verifyNoInteractions(messaging);
     }
 }

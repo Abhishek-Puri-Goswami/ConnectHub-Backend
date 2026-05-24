@@ -64,6 +64,9 @@ public class PresenceNotificationService {
                 redis.convertAndSend("chat:presence", mapper.writeValueAsString(p));
             }
             log.debug("Broadcast online snapshot ({} users) to newly connected user {}", onlineIds.size(), excludeUid);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            log.warn("Online snapshot interrupted for user {}", excludeUid);
         } catch (Exception e) {
             log.warn("Could not broadcast online snapshot for user {}: {}", excludeUid, e.getMessage());
         }

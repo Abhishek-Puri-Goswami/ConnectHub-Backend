@@ -40,5 +40,6 @@ class ExceptionAspectTest {
 
         aspect.logException(joinPoint, new RuntimeException((String) null));
         // no exception should propagate
+        verify(joinPoint).getSignature();
     }
 }

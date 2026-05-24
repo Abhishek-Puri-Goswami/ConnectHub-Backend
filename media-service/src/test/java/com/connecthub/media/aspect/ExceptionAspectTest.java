@@ -25,6 +25,7 @@ class ExceptionAspectTest {
 
         // Should just log and not throw
         aspect.logException(jp, new RuntimeException("test error"));
+        verify(jp).getSignature();
     }
 
     @Test
@@ -37,5 +38,6 @@ class ExceptionAspectTest {
         when(jp.getArgs()).thenReturn(new Object[]{});
 
         aspect.logException(jp, new IllegalArgumentException("bad arg"));
+        verify(jp).getSignature();
     }
 }

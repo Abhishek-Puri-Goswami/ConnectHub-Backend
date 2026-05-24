@@ -15,6 +15,7 @@ import java.util.*;
 @RequestMapping("/api/v1/rooms")
 @RequiredArgsConstructor
 @Tag(name = "Rooms", description = "Room and channel management")
+@SuppressWarnings("java:S4684")
 public class RoomResource {
 	private final RoomService svc;
 

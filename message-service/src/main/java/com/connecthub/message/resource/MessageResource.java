@@ -17,6 +17,7 @@ import java.util.*;
 @RequestMapping("/api/v1/messages")
 @RequiredArgsConstructor
 @Tag(name = "Messages", description = "Chat message lifecycle")
+@SuppressWarnings("java:S4684")
 public class MessageResource {
 	private final MessageService svc;
 

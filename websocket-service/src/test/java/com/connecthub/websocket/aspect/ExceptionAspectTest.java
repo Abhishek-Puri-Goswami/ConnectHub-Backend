@@ -38,5 +38,6 @@ class ExceptionAspectTest {
         when(joinPoint.getArgs()).thenReturn(new Object[0]);
 
         aspect.logException(joinPoint, new RuntimeException((String) null));
+        verify(joinPoint).getSignature();
     }
 }

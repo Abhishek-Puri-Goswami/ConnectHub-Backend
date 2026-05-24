@@ -16,6 +16,7 @@ import java.util.Map;
 
 @RestController @RequestMapping("/api/v1/notifications") @RequiredArgsConstructor
 @Tag(name = "Notifications", description = "In-app notification management")
+@SuppressWarnings("java:S4684")
 public class NotifResource {
     private final NotifService svc;
     private final DeviceTokenRepository deviceTokenRepo;

@@ -58,6 +58,6 @@ class KafkaNotificationListenerTest {
     void handleDlq_logsWithoutThrowing() {
         // DLQ handler should log and not throw
         listener.handleDlq("{}", "notifications.offline.dlq", 0L);
-        // No exception = PASS
+        verifyNoInteractions(notifService);
     }
 }

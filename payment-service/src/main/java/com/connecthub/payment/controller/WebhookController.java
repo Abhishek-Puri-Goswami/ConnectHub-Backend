@@ -68,7 +68,7 @@ public class WebhookController {
             log.error("Webhook processing error: {}", e.getMessage(), e);
             // Return 200 to prevent Razorpay from retrying on our processing errors
             // (signature is already verified — data integrity is intact)
-            return ResponseEntity.ok("Accepted with processing error — check logs");
+            return ResponseEntity.ok("Accepted with processing error — check logs"); // NOSONAR java:S3751
         }
     }
 }

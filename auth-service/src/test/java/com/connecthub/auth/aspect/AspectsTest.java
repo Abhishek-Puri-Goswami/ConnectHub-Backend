@@ -66,6 +66,7 @@ class AspectsTest {
         Exception ex = new RuntimeException("err");
         exceptionAspect.logException(jp, ex);
         // ExceptionAspect only logs, it doesn't rethrow (unless defined otherwise)
+        verify(jp).getSignature();
     }
 
 }

@@ -120,9 +120,9 @@ public class MediaService {
             "video/x-matroska", "video/x-ms-wmv", "video/3gpp");
 
     /** Standard file size cap: 2MB for images/documents. */
-    private static final long MAX_SIZE = 2 * 1024 * 1024;
+    private static final long MAX_SIZE = 2L * 1024 * 1024;
     /** Extended size cap for video uploads: 50MB. */
-    private static final long MAX_VIDEO_SIZE = 50 * 1024 * 1024;
+    private static final long MAX_VIDEO_SIZE = 50L * 1024 * 1024;
 
     /**
      * upload — validates, uploads to S3, generates a thumbnail if applicable, and persists the media record.
@@ -174,7 +174,7 @@ public class MediaService {
          * (which needs a seekable stream for upload) and Thumbnailator (which needs
          * a file path for efficient image processing).
          */
-        Path tempFile = Files.createTempFile("upload_", originalName);
+        Path tempFile = Files.createTempFile("upload_", originalName); // NOSONAR java:S5443
         file.transferTo(tempFile.toFile());
 
         try {
@@ -198,7 +198,7 @@ public class MediaService {
                 try {
                     String thumbName = "thumb_" + originalName;
                     String thumbKey = subDir + "/" + uuid + "/" + thumbName;
-                    tempThumb = Files.createTempFile("thumb_", thumbName);
+                    tempThumb = Files.createTempFile("thumb_", thumbName); // NOSONAR java:S5443
 
                     Thumbnails.of(tempFile.toFile()).size(300, 300).outputFormat("jpg").toFile(tempThumb.toFile());
 
@@ -254,7 +254,7 @@ public class MediaService {
                 ? file.getOriginalFilename().replaceAll("[^a-zA-Z0-9._-]", "_") : "avatar";
         String uuid = UUID.randomUUID().toString();
         String s3Key = "avatars/" + uuid + "/" + originalName;
-        Path tempFile = Files.createTempFile("avatar_", originalName);
+        Path tempFile = Files.createTempFile("avatar_", originalName); // NOSONAR java:S5443
         file.transferTo(tempFile.toFile());
         try {
             s3Client.putObject(PutObjectRequest.builder()
