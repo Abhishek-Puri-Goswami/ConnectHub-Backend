@@ -43,6 +43,20 @@
         <sonar.cpd.exclusions>
             **/*Test.java,**/*Tests.java,**/*IT.java
         </sonar.cpd.exclusions>
+        <!--
+          Suppress common false-positive code-smell rules in test sources:
+          - java:S100  Method naming convention — test methods conventionally use
+                       snake_case (e.g. createRoom_success) for readability; camelCase
+                       would make them harder to parse.
+          - java:S1192 Duplicate string literals — Mockito/AssertJ test setup legitimately
+                       repeats the same short values ("r1", "GROUP", etc.) across many
+                       @Test methods; extracting them to constants would obscure intent.
+        -->
+        <sonar.issue.ignore.multicriteria>e1,e2</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria.e1.ruleKey>java:S100</sonar.issue.ignore.multicriteria.e1.ruleKey>
+        <sonar.issue.ignore.multicriteria.e1.resourceKey>**/*Test.java</sonar.issue.ignore.multicriteria.e1.resourceKey>
+        <sonar.issue.ignore.multicriteria.e2.ruleKey>java:S1192</sonar.issue.ignore.multicriteria.e2.ruleKey>
+        <sonar.issue.ignore.multicriteria.e2.resourceKey>**/*Test.java</sonar.issue.ignore.multicriteria.e2.resourceKey>
         <!-- Pass token via CLI: -Dsonar.token=<your-token>  (SonarQube 10.x removed user/password auth) -->
         <sonar.token></sonar.token>
         <!-- JaCoCo minimum line coverage (override via -Djacoco.minimum.coverage=0.xx) -->

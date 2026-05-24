@@ -12,9 +12,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
@@ -94,5 +96,24 @@ class PresenceNotificationServiceTest {
 
         assertDoesNotThrow(() -> service.broadcastOnlineSnapshot("1"));
         verify(redis, never()).convertAndSend(anyString(), anyString());
+    }
+
+    @Test
+    void broadcastOnlineSnapshot_threadInterrupted_doesNotThrow() throws InterruptedException {
+        // Run the method in a background thread so we can interrupt the Thread.sleep(400) inside it.
+        // Interrupting causes the catch(InterruptedException) branch to execute, re-setting the
+        // interrupt flag via Thread.currentThread().interrupt() — this covers those two lines.
+        CountDownLatch started = new CountDownLatch(1);
+        Thread thread = new Thread(() -> {
+            started.countDown();
+            service.broadcastOnlineSnapshot("99");
+        });
+        thread.start();
+        started.await();
+        thread.interrupt(); // triggers InterruptedException inside Thread.sleep(400)
+        thread.join(2000);
+
+        assertFalse(thread.isAlive());
+        verifyNoInteractions(presenceServiceClient); // interrupted before getOnlineUserIds was reached
     }
 }

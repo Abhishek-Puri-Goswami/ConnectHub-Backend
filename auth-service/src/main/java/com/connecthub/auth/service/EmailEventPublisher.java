@@ -61,7 +61,7 @@ public class EmailEventPublisher {
             "{\"to\":\"%s\",\"otp\":\"%s\",\"purpose\":\"%s\"}", to, otp, purpose
         );
         redis.convertAndSend(EMAIL_CHANNEL, payload);
-        log.info("OTP email event published for {} (purpose={})", to.replaceAll("[\r\n]", ""), purpose);
+        log.info("OTP email event published for {} (purpose={})", to.replaceAll("[\r\n]", ""), purpose); // NOSONAR java:S5145
     }
 
     /**
@@ -76,7 +76,7 @@ public class EmailEventPublisher {
             "{\"to\":\"%s\",\"otp\":\"%s\",\"purpose\":\"sms_otp\",\"channel\":\"sms\"}", phone, otp
         );
         redis.convertAndSend(EMAIL_CHANNEL, payload);
-        log.info("SMS OTP event published for phone: {}", phone.replaceAll("[\r\n]", ""));
+        log.info("SMS OTP event published for phone: {}", phone.replaceAll("[\r\n]", "")); // NOSONAR java:S5145
     }
 
     /**
