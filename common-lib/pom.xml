@@ -16,6 +16,29 @@
         includes this dependency gets the beans without any extra config.
     </description>
 
+    <build>
+        <plugins>
+            <!--
+              common-lib is a plain jar library, not a Spring Boot application.
+              The parent POM binds spring-boot:repackage which requires a main
+              class — skip it here so the module produces a regular jar.
+            -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>repackage</id>
+                        <goals><goal>repackage</goal></goals>
+                        <configuration>
+                            <skip>true</skip>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
     <dependencies>
         <!-- AOP support for aspect beans -->
         <dependency>

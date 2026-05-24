@@ -16,10 +16,12 @@ COPY websocket-service/pom.xml websocket-service/pom.xml
 COPY payment-service/pom.xml payment-service/pom.xml
 COPY admin-server/pom.xml admin-server/pom.xml
 COPY config-server/pom.xml config-server/pom.xml
+COPY common-lib/pom.xml common-lib/pom.xml
 COPY code-coverage-report/pom.xml code-coverage-report/pom.xml
 
 RUN mvn -pl config-server -am dependency:go-offline -q
 
+COPY common-lib/src common-lib/src
 COPY config-server/src config-server/src
 RUN mvn -pl config-server -am package -Dmaven.test.skip=true
 

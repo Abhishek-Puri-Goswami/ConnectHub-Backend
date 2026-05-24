@@ -16,10 +16,12 @@ COPY notification-service/pom.xml notification-service/pom.xml
 COPY websocket-service/pom.xml websocket-service/pom.xml
 COPY payment-service/pom.xml payment-service/pom.xml
 COPY admin-server/pom.xml admin-server/pom.xml
+COPY common-lib/pom.xml common-lib/pom.xml
 COPY code-coverage-report/pom.xml code-coverage-report/pom.xml
 
 RUN mvn -pl notification-service -am dependency:go-offline -q
 
+COPY common-lib/src common-lib/src
 COPY notification-service/src notification-service/src
 RUN mvn -pl notification-service -am package -Dmaven.test.skip=true
 

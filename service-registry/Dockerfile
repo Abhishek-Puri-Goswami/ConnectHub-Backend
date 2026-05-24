@@ -17,12 +17,14 @@ COPY notification-service/pom.xml notification-service/pom.xml
 COPY websocket-service/pom.xml websocket-service/pom.xml
 COPY payment-service/pom.xml payment-service/pom.xml
 COPY admin-server/pom.xml admin-server/pom.xml
+COPY common-lib/pom.xml common-lib/pom.xml
 COPY code-coverage-report/pom.xml code-coverage-report/pom.xml
 
 # Download dependencies (cached layer)
 RUN mvn -pl service-registry -am dependency:go-offline -q
 
 # Copy source and build
+COPY common-lib/src common-lib/src
 COPY service-registry/src service-registry/src
 RUN mvn -pl service-registry -am package -Dmaven.test.skip=true
 
