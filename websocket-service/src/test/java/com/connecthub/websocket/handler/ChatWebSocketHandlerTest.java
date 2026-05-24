@@ -286,4 +286,54 @@ class ChatWebSocketHandlerTest {
 
         assertDoesNotThrow(() -> handler.handleDelete(p, headers));
     }
+
+    // ── handlePin ────────────────────────────────────────────────────────────
+
+    @Test
+    void handlePin_setsPinnedByAndBroadcastsViaPinChannel() throws Exception {
+        PinMessagePayload p = new PinMessagePayload();
+        p.setRoomId("r1"); p.setMessageId("m5");
+        when(mapper.writeValueAsString(any(PinMessagePayload.class))).thenReturn("{\"pin\":1}");
+
+        handler.handlePin(p, headers);
+
+        assertEquals(1, p.getPinnedBy());
+        verify(redis).convertAndSend(eq(RedisConfig.PIN_CHANNEL), eq("{\"pin\":1}"));
+        verify(roomServiceClient).pinMessage(eq("r1"), eq("m5"), eq("1"));
+    }
+
+    @Test
+    void handlePin_mapperErrorHandledGracefully() throws Exception {
+        PinMessagePayload p = new PinMessagePayload();
+        p.setRoomId("r1"); p.setMessageId("m5");
+        when(mapper.writeValueAsString(any())).thenThrow(new RuntimeException("err"));
+
+        assertDoesNotThrow(() -> handler.handlePin(p, headers));
+        verify(redis, never()).convertAndSend(anyString(), anyString());
+    }
+
+    // ── handleUnpin ───────────────────────────────────────────────────────────
+
+    @Test
+    void handleUnpin_nullsMessageIdAndBroadcastsViaPinChannel() throws Exception {
+        PinMessagePayload p = new PinMessagePayload();
+        p.setRoomId("r1"); p.setMessageId("m5");
+        when(mapper.writeValueAsString(any(PinMessagePayload.class))).thenReturn("{\"unpin\":1}");
+
+        handler.handleUnpin(p, headers);
+
+        assertEquals(1, p.getPinnedBy());
+        assertNull(p.getMessageId());
+        verify(redis).convertAndSend(eq(RedisConfig.PIN_CHANNEL), eq("{\"unpin\":1}"));
+        verify(roomServiceClient).unpinMessage(eq("r1"), eq("1"));
+    }
+
+    @Test
+    void handleUnpin_mapperErrorHandledGracefully() throws Exception {
+        PinMessagePayload p = new PinMessagePayload();
+        p.setRoomId("r1"); p.setMessageId("m5");
+        when(mapper.writeValueAsString(any())).thenThrow(new RuntimeException("err"));
+
+        assertDoesNotThrow(() -> handler.handleUnpin(p, headers));
+    }
 }
