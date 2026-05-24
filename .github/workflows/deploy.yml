@@ -66,3 +66,7 @@ jobs:
             
             # Start the backend cleanly (notice we removed --build since we use pre-built images now!)
             docker compose up -d
+
+            # Remove dangling images left behind by this deploy (old layers replaced by new ones).
+            # Runs after up -d so live containers are never affected.
+            docker image prune -f
