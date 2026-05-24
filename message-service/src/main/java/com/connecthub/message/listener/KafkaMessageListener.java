@@ -37,17 +37,12 @@ import java.util.Map;
  *   2. IDEMPOTENCY — check if the messageId already exists in the database. If it does,
  *      the Feign call already persisted it; skip re-insertion but still emit to
  *      "chat.messages.outbound" so downstream consumers get the event. This prevents
- *      double-counting rate limits and guest caps on re-consumed messages.
+ *      double-counting rate limits on re-consumed messages.
  *
- *   3. GUEST LIFETIME CAP — guests (usernames starting with "guest_") are limited to
- *      50 messages total (tracked via Redis counter "guest:limits:{userId}"). Once
- *      the cap is hit, a rejection event is emitted to "chat.messages.rejected" so
- *      websocket-service can relay the error message back to the guest's STOMP session.
- *
- *   4. TIER RATE LIMIT — MessageService.send() enforces the per-minute message cap
+ *   3. TIER RATE LIMIT — MessageService.send() enforces the per-minute message cap
  *      based on the subscription tier. If exceeded, a rate limit rejection is emitted.
  *
- *   5. PERSISTENCE + OUTBOUND — save the message via MessageService.send() and emit
+ *   4. PERSISTENCE + OUTBOUND — save the message via MessageService.send() and emit
  *      the saved entity to "chat.messages.outbound" for any downstream consumers.
  *
  * KAFKA RELIABILITY:
@@ -58,7 +53,7 @@ import java.util.Map;
  *     doesn't declare them; the Kafka retry interceptor catches all thrown exceptions.
  *
  * REJECTION EVENTS:
- *   When a message is rejected (guest cap or rate limit), a JSON event is published
+ *   When a message is rejected (rate limit exceeded), a JSON event is published
  *   to "chat.messages.rejected". websocket-service subscribes to this and forwards
  *   the error message to the sender's personal STOMP queue so they see the error
  *   immediately in the UI without waiting for an HTTP response.
@@ -148,7 +143,6 @@ public class KafkaMessageListener {
 
     /**
      * emitRejection — publishes a general limit rejection event.
-     * Used when a guest user exceeds their 50-message lifetime cap.
      * websocket-service consumes "chat.messages.rejected" and forwards the
      * userMessage string to the sender's personal STOMP error queue.
      */

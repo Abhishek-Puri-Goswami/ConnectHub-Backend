@@ -24,10 +24,8 @@ import java.util.Map;
  *   receive any feedback that it was blocked.
  *
  * REJECTION SCENARIOS:
- *   Two types of rejections arrive on this topic:
- *   1. LIMIT_EXCEEDED — guest user hit the 50-message lifetime cap.
- *      The "message" field contains a human-readable prompt to sign up.
- *   2. RATE_LIMIT — user exceeded their per-minute message quota for their tier.
+ *   One type of rejection arrives on this topic:
+ *   RATE_LIMIT — user exceeded their per-minute message quota for their tier.
  *      The "limit" field tells the client the cap value so it can display it.
  *
  * DELIVERY TO FRONTEND:

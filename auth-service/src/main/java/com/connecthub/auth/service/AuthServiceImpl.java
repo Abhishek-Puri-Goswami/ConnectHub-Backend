@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit;
  * PURPOSE:
  * This is the main service class that implements all authentication flows
  * in the auth-service. It handles registration, email/phone OTP flows,
- * password login, guest login, OAuth2 callbacks, session management,
+ * password login, OAuth2 callbacks, session management,
  * forgot/reset password, and user profile management.
  *
  * It is annotated with @Transactional at the class level, meaning every
@@ -59,15 +59,6 @@ import java.util.concurrent.TimeUnit;
  * After resetPassword(), a Redis key "user:invalidated:{userId}" is set.
  * This allows the API gateway or other services to detect that old tokens
  * issued before the password change should no longer be trusted.
- *
- * Guest Login:
- * Creates a real user account in the database with role=GUEST, using a
- * random UUID-based username and a private email domain
- * (@guest.connecthub.local).
- * The password is a random UUID hash so no one can log in as a guest via
- * password.
- * Guest accounts are not cleaned up automatically — a scheduled job could prune
- * them.
  *
  * OAuth2:
  * The oAuth2Callback() method throws an error because OAuth2 login is handled

@@ -40,7 +40,7 @@ public class AdminResource {
      * Rules (matching real-world role hierarchy):
      *   - PLATFORM_ADMIN targets are always protected — nobody can touch them.
      *   - ADMIN targets require the caller to be PLATFORM_ADMIN.
-     *   - USER / GUEST targets are accessible to any admin.
+     *   - USER targets are accessible to any admin.
      * Returns a 403 ResponseEntity when access is denied, null when allowed.
      */
     private ResponseEntity<Void> checkPrivilege(String requesterRole, int targetUserId) {

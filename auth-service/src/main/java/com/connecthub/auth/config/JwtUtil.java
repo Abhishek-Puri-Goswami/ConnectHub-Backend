@@ -52,7 +52,7 @@ import java.util.Map;
  *   - sub (subject)       — userId as a string (e.g., "42")
  *   - email               — user's email address
  *   - username            — user's username
- *   - role                — USER, ADMIN, GUEST, etc.
+ *   - role                — USER, ADMIN, PLATFORM_ADMIN
  *   - subscriptionTier    — FREE or PRO (used by gateway to set X-Subscription-Tier)
  *   - iat (issued at)     — Unix timestamp of token issuance
  *   - exp (expiry)        — Unix timestamp of token expiry
@@ -82,7 +82,7 @@ public class JwtUtil {
     /**
      * generateAccessToken — creates a signed JWT containing the user's full identity.
      * The subscriptionTier defaults to "FREE" if the user entity doesn't have one set
-     * (e.g., for guest accounts or users created before the tier field was added).
+     * (e.g., for users created before the tier field was added).
      */
     public String generateAccessToken(User user) {
         Map<String, Object> claims = new HashMap<>();
