@@ -77,7 +77,8 @@ class WebSocketEventListenerTest {
     @Test
     void onConnect_secondSession_doesNotNotifyOnlineAgain() {
         when(redis.opsForSet()).thenReturn(setOps);
-        when(setOps.add(eq(SESSION_SET_KEY), eq("sess-abc"))).thenReturn(2L);
+        // 0L means the element was already in the set (session already registered) → not the first session
+        when(setOps.add(eq(SESSION_SET_KEY), eq("sess-abc"))).thenReturn(0L);
 
         listener.onConnect(buildConnectEvent(principal));
 

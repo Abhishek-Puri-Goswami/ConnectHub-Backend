@@ -190,14 +190,16 @@ class ChatWebSocketHandlerTest {
     // ── handleRead ───────────────────────────────────────────────────────────
 
     @Test
-    void handleRead_setsReaderIdAndBroadcasts() {
+    void handleRead_setsReaderIdAndBroadcasts() throws Exception {
         ReadReceiptPayload p = new ReadReceiptPayload();
         p.setRoomId("r1"); p.setUpToMessageId("m5");
+        when(mapper.writeValueAsString(any(ReadReceiptPayload.class))).thenReturn("{}");
 
         handler.handleRead(p, headers);
 
         assertEquals(1, p.getReaderId());
-        verify(messaging).convertAndSend(eq("/topic/room/r1/read"), any(ReadReceiptPayload.class));
+        // handleRead now routes through Redis pub/sub (READ_CHANNEL) for cross-pod delivery
+        verify(redis).convertAndSend(eq(RedisConfig.READ_CHANNEL), anyString());
     }
 
     // ── handleReaction ───────────────────────────────────────────────────────

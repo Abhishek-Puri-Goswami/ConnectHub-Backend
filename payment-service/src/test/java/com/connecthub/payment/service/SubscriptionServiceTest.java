@@ -202,7 +202,11 @@ class SubscriptionServiceTest {
 
         com.razorpay.Order rzpOrder = mock(com.razorpay.Order.class);
         when(rzpOrder.get("id")).thenReturn("order_new");
-        when(razorpayClient.orders.create(any(JSONObject.class))).thenReturn(rzpOrder);
+        // razorpayClient is a Mockito mock — its public field 'orders' is null by default.
+        // Create a mock OrderClient and assign it so the stub doesn't NPE.
+        com.razorpay.OrderClient mockOrders = mock(com.razorpay.OrderClient.class);
+        razorpayClient.orders = mockOrders;
+        when(mockOrders.create(any(JSONObject.class))).thenReturn(rzpOrder);
         when(subscriptionRepo.save(any())).thenAnswer(i -> i.getArgument(0));
 
         SubscriptionResponse res = svc.createOrder(1, "test@test.com");

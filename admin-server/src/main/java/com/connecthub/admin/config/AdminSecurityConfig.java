@@ -37,7 +37,10 @@ public class AdminSecurityConfig {
                 .requestMatchers(
                     adminServer.path("/assets/**"),
                     adminServer.path("/login"),
-                    adminServer.path("/actuator/**")
+                    // Only non-sensitive actuator endpoints are public;
+                    // /actuator/env, /actuator/metrics, etc. require authentication
+                    "/actuator/health",
+                    "/actuator/info"
                 ).permitAll()
                 .anyRequest().authenticated()
             )

@@ -30,6 +30,12 @@ razorpay:
 jwt:
   secret: dGVzdC1zZWNyZXQta2V5LWZvci10ZXN0aW5nLW9ubHktbm90LXVzZWQtaW4tcHJvZHVjdGlvbg==
 
+payment:
+  pro:
+    amount-paise: 9900
+  platinum:
+    amount-paise: 19900
+
 
 
 
