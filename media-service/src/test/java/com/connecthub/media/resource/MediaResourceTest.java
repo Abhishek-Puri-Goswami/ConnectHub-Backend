@@ -108,4 +108,89 @@ class MediaResourceTest {
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resp.getBody()).isEqualTo(5);
     }
+
+    // ── upload — non-member ───────────────────────────────────────────────────
+
+    @Test
+    void upload_notMember_returns403() throws IOException {
+        when(roomServiceClient.isMember("room1", 99)).thenReturn(false);
+        MockMultipartFile file = new MockMultipartFile("file", "a.txt", "text/plain", "x".getBytes());
+
+        ResponseEntity<MediaFile> resp = resource.upload(file, 99, "FREE", "room1");
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        verify(svc, never()).upload(any(), anyInt(), anyString(), any());
+    }
+
+    // ── get — room membership check ───────────────────────────────────────────
+
+    @Test
+    void get_withRoomId_notMember_returns403() {
+        MediaFile mf = MediaFile.builder().mediaId("id1").roomId("room1").build();
+        when(svc.getById("id1")).thenReturn(Optional.of(mf));
+        when(roomServiceClient.isMember("room1", 99)).thenReturn(false);
+
+        ResponseEntity<MediaFile> resp = resource.get("id1", 99);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    // ── del — wrong uploader ──────────────────────────────────────────────────
+
+    @Test
+    void del_wrongUploader_returns403() {
+        MediaFile mf = MediaFile.builder().mediaId("id1").uploaderId(5).build();
+        when(svc.getById("id1")).thenReturn(Optional.of(mf));
+
+        ResponseEntity<Void> resp = resource.del("id1", 99); // 99 != 5
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        verify(svc, never()).delete(anyString());
+    }
+
+    @Test
+    void del_notFound_returns404() {
+        when(svc.getById("ghost")).thenReturn(Optional.empty());
+
+        ResponseEntity<Void> resp = resource.del("ghost", 1);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    // ── uploadProfilePicture ──────────────────────────────────────────────────
+
+    @Test
+    void uploadProfilePicture_returns200WithUrl() throws IOException {
+        MockMultipartFile file = new MockMultipartFile("file", "avatar.png", "image/png", "img".getBytes());
+        MediaFile saved = MediaFile.builder().mediaId("av1").url("https://s3.example.com/av1").build();
+        when(svc.uploadProfilePicture(any(), eq(1))).thenReturn(saved);
+
+        ResponseEntity<java.util.Map<String, String>> resp = resource.uploadProfilePicture(file, 1);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resp.getBody()).containsEntry("url", "https://s3.example.com/av1");
+    }
+
+    // ── totalStorage ──────────────────────────────────────────────────────────
+
+    @Test
+    void totalStorage_delegatesToService() {
+        when(svc.getTotalStorageMb()).thenReturn(512.5);
+
+        ResponseEntity<Double> resp = resource.totalStorage();
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(resp.getBody()).isEqualTo(512.5);
+    }
+
+    // ── checkRoomMembership — fail closed on exception ────────────────────────
+
+    @Test
+    void byRoom_membershipCheckThrows_returns403() {
+        when(roomServiceClient.isMember("room1", 1)).thenThrow(new RuntimeException("room-service down"));
+
+        ResponseEntity<List<MediaFile>> resp = resource.byRoom("room1", 1);
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
 }
