@@ -1,0 +1,20 @@
+# ── Native-run infra override ────────────────────────────────────────
+# Usage:  docker-compose -f docker-compose.yml -f docker-compose.infra.yml up -d kafka redis
+#
+# Backend services run natively (java -jar via start-backend.ps1), not in
+# Docker. This override only publishes the ports Kafka/Redis need so the
+# native JVM processes on localhost can reach them, matching the defaults
+# baked into each service's application.yml (localhost:9092, localhost:6379).
+# MySQL is not defined here — it runs as a native Windows install.
+
+services:
+  kafka:
+    ports: ["9092:9092"]
+    environment:
+      # Override so the broker tells clients to reconnect to "localhost:9092"
+      # instead of the internal docker hostname "kafka", which the native
+      # JVM processes on the host cannot resolve.
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://localhost:9092"
+
+  redis:
+    ports: ["6379:6379"]

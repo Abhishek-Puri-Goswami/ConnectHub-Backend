@@ -1,0 +1,179 @@
+{
+  "v": 6,
+  "name": "ConnectHub - Message Service",
+  "folders": [
+    {
+      "v": 6,
+      "name": "1. Message CRUD",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "Send Message",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/messages",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"roomId\": \"<<roomId>>\",\n  \"content\": \"Hello from Hoppscotch!\",\n  \"type\": \"TEXT\"\n}"
+          },
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status is 201\", () => pw.expect(pw.response.status).toBe(201));\nif (pw.response.body.messageId) {\n  pw.env.set(\"messageId\", pw.response.body.messageId);\n}"
+        },
+        {
+          "v": "1",
+          "name": "Get Messages (cursor paginated)",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/messages/room/<<roomId>>",
+          "params": [{ "key": "limit", "value": "50", "active": true }],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Edit Message",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/api/v1/messages/<<messageId>>",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"content\": \"Hello from Hoppscotch (edited)!\"\n}"
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Delete Message",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/api/v1/messages/<<messageId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Search Messages In Room",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/messages/room/<<roomId>>/search",
+          "params": [{ "key": "keyword", "value": "Hello", "active": true }],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Update Delivery Status",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/api/v1/messages/<<messageId>>/status",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"status\": \"DELIVERED\"\n}"
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Unread Count In Room",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/messages/room/<<roomId>>/unread",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Clear Room History",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/api/v1/messages/room/<<roomId>>/clear",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Count Messages Today",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/messages/count/today",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    },
+    {
+      "v": 6,
+      "name": "2. Reactions",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "Add Reaction",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/messages/<<messageId>>/reactions",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"emoji\": \"\\ud83d\\udc4d\"\n}"
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Get Reactions",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/messages/<<messageId>>/reactions",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Remove Reaction",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/api/v1/messages/<<messageId>>/reactions",
+          "params": [{ "key": "emoji", "value": "👍", "active": true }],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": { "authType": "inherit", "authActive": true },
+  "headers": []
+}

@@ -1,0 +1,56 @@
+{
+  "v": 6,
+  "name": "ConnectHub - Infra & Health",
+  "folders": [
+    {
+      "v": 6,
+      "name": "1. Service Health (via gateway)",
+      "folders": [],
+      "requests": [
+        { "v": "1", "name": "API Gateway Health", "method": "GET", "endpoint": "<<baseUrl>>/actuator/health", "params": [], "headers": [], "auth": { "authType": "none", "authActive": true }, "body": { "contentType": null, "body": null }, "preRequestScript": "", "testScript": "" },
+        { "v": "1", "name": "Auth Service Health (direct)", "method": "GET", "endpoint": "<<authServiceUrl>>/actuator/health", "params": [], "headers": [], "auth": { "authType": "none", "authActive": true }, "body": { "contentType": null, "body": null }, "preRequestScript": "", "testScript": "" },
+        { "v": "1", "name": "Config Server Health (direct)", "method": "GET", "endpoint": "http://localhost:8888/actuator/health", "params": [], "headers": [], "auth": { "authType": "none", "authActive": true }, "body": { "contentType": null, "body": null }, "preRequestScript": "", "testScript": "" },
+        { "v": "1", "name": "Room Service Health (direct)", "method": "GET", "endpoint": "http://localhost:8082/actuator/health", "params": [], "headers": [], "auth": { "authType": "none", "authActive": true }, "body": { "contentType": null, "body": null }, "preRequestScript": "", "testScript": "" },
+        { "v": "1", "name": "Message Service Health (direct)", "method": "GET", "endpoint": "http://localhost:8083/actuator/health", "params": [], "headers": [], "auth": { "authType": "none", "authActive": true }, "body": { "contentType": null, "body": null }, "preRequestScript": "", "testScript": "" },
+        { "v": "1", "name": "Media Service Health (direct)", "method": "GET", "endpoint": "http://localhost:8084/actuator/health", "params": [], "headers": [], "auth": { "authType": "none", "authActive": true }, "body": { "contentType": null, "body": null }, "preRequestScript": "", "testScript": "" },
+        { "v": "1", "name": "Presence Service Health (direct)", "method": "GET", "endpoint": "http://localhost:8085/actuator/health", "params": [], "headers": [], "auth": { "authType": "none", "authActive": true }, "body": { "contentType": null, "body": null }, "preRequestScript": "", "testScript": "" },
+        { "v": "1", "name": "Notification Service Health (direct)", "method": "GET", "endpoint": "http://localhost:8086/actuator/health", "params": [], "headers": [], "auth": { "authType": "none", "authActive": true }, "body": { "contentType": null, "body": null }, "preRequestScript": "", "testScript": "" },
+        { "v": "1", "name": "WebSocket Service Health (direct)", "method": "GET", "endpoint": "http://localhost:8087/actuator/health", "params": [], "headers": [], "auth": { "authType": "none", "authActive": true }, "body": { "contentType": null, "body": null }, "preRequestScript": "", "testScript": "" },
+        { "v": "1", "name": "Payment Service Health (direct)", "method": "GET", "endpoint": "http://localhost:8088/actuator/health", "params": [], "headers": [], "auth": { "authType": "none", "authActive": true }, "body": { "contentType": null, "body": null }, "preRequestScript": "", "testScript": "" },
+        { "v": "1", "name": "Admin Server Health (direct)", "method": "GET", "endpoint": "http://localhost:9090/actuator/health", "params": [], "headers": [], "auth": { "authType": "none", "authActive": true }, "body": { "contentType": null, "body": null }, "preRequestScript": "", "testScript": "" }
+      ]
+    },
+    {
+      "v": 6,
+      "name": "2. Eureka Registry",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "List Registered Apps",
+          "method": "GET",
+          "endpoint": "http://localhost:8761/eureka/apps",
+          "params": [],
+          "headers": [{ "key": "Accept", "value": "application/json", "active": true }],
+          "auth": { "authType": "basic", "authActive": true, "username": "eureka", "password": "eureka" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    },
+    {
+      "v": 6,
+      "name": "3. Swagger Aggregation (via gateway)",
+      "folders": [],
+      "requests": [
+        { "v": "1", "name": "Auth Service OpenAPI", "method": "GET", "endpoint": "<<baseUrl>>/auth-docs/v3/api-docs", "params": [], "headers": [], "auth": { "authType": "none", "authActive": true }, "body": { "contentType": null, "body": null }, "preRequestScript": "", "testScript": "" },
+        { "v": "1", "name": "Room Service OpenAPI", "method": "GET", "endpoint": "<<baseUrl>>/room-docs/v3/api-docs", "params": [], "headers": [], "auth": { "authType": "none", "authActive": true }, "body": { "contentType": null, "body": null }, "preRequestScript": "", "testScript": "" },
+        { "v": "1", "name": "Message Service OpenAPI", "method": "GET", "endpoint": "<<baseUrl>>/message-docs/v3/api-docs", "params": [], "headers": [], "auth": { "authType": "none", "authActive": true }, "body": { "contentType": null, "body": null }, "preRequestScript": "", "testScript": "" }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": { "authType": "inherit", "authActive": true },
+  "headers": []
+}

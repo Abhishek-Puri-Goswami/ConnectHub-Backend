@@ -1,0 +1,133 @@
+{
+  "v": 6,
+  "name": "ConnectHub - Presence Service",
+  "folders": [
+    {
+      "v": 6,
+      "name": "1. Presence",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "Set Online",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/presence/online/<<userId>>",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"deviceType\": \"WEB\",\n  \"sessionId\": \"hoppscotch-test-session\"\n}"
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Set Offline",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/presence/offline/<<userId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Update Status (custom message)",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/api/v1/presence/status/<<userId>>",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"status\": \"AWAY\",\n  \"customMessage\": \"In a meeting\"\n}"
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Get Presence For User",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/presence/<<userId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Check Online",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/presence/<<userId>>/check",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Bulk Presence Lookup",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/presence/bulk",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "[<<userId>>]"
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Online Count",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/presence/online/count",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Online User Ids",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/presence/online/users",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Ping (heartbeat)",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/presence/ping/<<userId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": { "authType": "inherit", "authActive": true },
+  "headers": []
+}

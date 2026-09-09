@@ -21,10 +21,17 @@ buildNumber.properties
 .env.*
 !.env.example
 
+# Demo credentials (contains real passwords/tokens for local seeded accounts)
+DETAILS.md
+
 # IDE
 .idea/
 .vscode/
+.sonarlint/
 *.iml
+
+# Local process tracking (runtime state, not source)
+backend-pids.csv
 
 # Logs
 logs/
@@ -37,3 +44,4 @@ replay_pid*.log
 **/.settings/
 .factorypath
 **/.factorypath
+/.metadata/

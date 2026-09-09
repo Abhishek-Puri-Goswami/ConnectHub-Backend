@@ -1,0 +1,67 @@
+{
+  "v": 6,
+  "name": "ConnectHub - WebSocket Service",
+  "folders": [
+    {
+      "v": 6,
+      "name": "1. REST endpoints (STOMP itself is not testable via REST client)",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "Broadcast (PLATFORM_ADMIN only)",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/ws/broadcast",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<adminAccessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"title\": \"Scheduled Maintenance\",\n  \"message\": \"ConnectHub will be briefly unavailable tonight at 2 AM.\"\n}"
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Active Connections Count",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/ws/connections/count",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<adminAccessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Get Unread Count (aggregate)",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/ws/unread/<<userId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Clear Unread Count",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/api/v1/ws/unread/<<userId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": { "authType": "inherit", "authActive": true },
+  "headers": []
+}

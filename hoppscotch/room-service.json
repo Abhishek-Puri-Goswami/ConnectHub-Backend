@@ -1,0 +1,304 @@
+{
+  "v": 6,
+  "name": "ConnectHub - Room Service",
+  "folders": [
+    {
+      "v": 6,
+      "name": "1. Room CRUD",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "Create Room",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/rooms",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"name\": \"General Chat\",\n  \"description\": \"A test room created via Hoppscotch\",\n  \"type\": \"GROUP\",\n  \"isPrivate\": false,\n  \"maxMembers\": 500,\n  \"memberIds\": []\n}"
+          },
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status is 201\", () => pw.expect(pw.response.status).toBe(201));\nif (pw.response.body.id) {\n  pw.env.set(\"roomId\", pw.response.body.id);\n}"
+        },
+        {
+          "v": "1",
+          "name": "Get Room By Id",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Get Rooms By User",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/user/<<userId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Get All Rooms (paged)",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/rooms",
+          "params": [
+            { "key": "page", "value": "0", "active": true },
+            { "key": "size", "value": "20", "active": true }
+          ],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Update Room",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"name\": \"General Chat (updated)\",\n  \"description\": \"Updated via Hoppscotch\"\n}"
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Delete Room",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Search Public Rooms",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/search",
+          "params": [{ "key": "q", "value": "General", "active": true }],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Count Active Rooms",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/count/active",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Update Last-Message Timestamp",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>/timestamp",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"preview\": \"Hey there!\",\n  \"senderId\": <<userId>>\n}"
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    },
+    {
+      "v": 6,
+      "name": "2. Members",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "Add Member",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>/members/<<memberUserId>>",
+          "params": [{ "key": "role", "value": "MEMBER", "active": true }],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "List Members",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>/members",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Check Membership",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>/members/<<memberUserId>>/check",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Update Member Role",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>/members/<<memberUserId>>/role",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"role\": \"MODERATOR\"\n}"
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Mute Member",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>/members/<<memberUserId>>/mute",
+          "params": [{ "key": "muted", "value": "true", "active": true }],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Mark Read",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>/read/<<userId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Remove Member",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>/members/<<memberUserId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    },
+    {
+      "v": 6,
+      "name": "3. Pinned Messages",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "Pin Message",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>/pin/<<messageId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Unpin Message",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>/pin",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    },
+    {
+      "v": 6,
+      "name": "4. Invite Links",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "Generate Invite Code",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>/invite",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": "if (pw.response.body.inviteCode) {\n  pw.env.set(\"inviteCode\", pw.response.body.inviteCode);\n}"
+        },
+        {
+          "v": "1",
+          "name": "Join By Invite Code",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/join/<<inviteCode>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Revoke Invite Code",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/api/v1/rooms/<<roomId>>/invite",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": { "authType": "inherit", "authActive": true },
+  "headers": []
+}

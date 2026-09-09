@@ -1,0 +1,110 @@
+{
+  "v": 6,
+  "name": "ConnectHub - Media Service",
+  "folders": [
+    {
+      "v": 6,
+      "name": "1. Media",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "Upload File To Room (attach a file manually in Body tab)",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/media/upload",
+          "params": [{ "key": "roomId", "value": "<<roomId>>", "active": true }],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "multipart/form-data",
+            "body": [
+              { "key": "file", "isFile": true, "type": "file", "value": [], "active": true, "contentType": "" }
+            ]
+          },
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status is 201\", () => pw.expect(pw.response.status).toBe(201));\nif (pw.response.body.id) {\n  pw.env.set(\"mediaId\", pw.response.body.id);\n}"
+        },
+        {
+          "v": "1",
+          "name": "Upload Profile Picture (attach a file manually in Body tab)",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/media/profile-picture",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "multipart/form-data",
+            "body": [
+              { "key": "file", "isFile": true, "type": "file", "value": [], "active": true, "contentType": "" }
+            ]
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Get Media By Id",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/media/<<mediaId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Get Media By Room",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/media/room/<<roomId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Count Media In Room",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/media/room/<<roomId>>/count",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Delete Media",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/api/v1/media/<<mediaId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Total Platform Storage (MB)",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/media/storage/total",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": { "authType": "inherit", "authActive": true },
+  "headers": []
+}

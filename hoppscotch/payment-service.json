@@ -1,0 +1,119 @@
+{
+  "v": 6,
+  "name": "ConnectHub - Payment Service",
+  "folders": [
+    {
+      "v": 6,
+      "name": "1. Subscription",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "Get Checkout Config",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/payments/subscription/config",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Create Subscription Order (PREMIUM)",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/payments/subscription/create",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"plan\": \"PREMIUM\"\n}"
+          },
+          "preRequestScript": "",
+          "testScript": "if (pw.response.body.razorpayOrderId) {\n  pw.env.set(\"razorpayOrderId\", pw.response.body.razorpayOrderId);\n}"
+        },
+        {
+          "v": "1",
+          "name": "Verify Payment (activate)",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/payments/subscription/verify",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"razorpay_payment_id\": \"<<razorpayPaymentId>>\",\n  \"razorpay_order_id\": \"<<razorpayOrderId>>\",\n  \"razorpay_signature\": \"<<razorpaySignature>>\"\n}"
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Get Subscription Status",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/payments/subscription/status",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Get Payment History",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/payments/subscription/payments",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Cancel Subscription",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/payments/subscription/cancel",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    },
+    {
+      "v": 6,
+      "name": "2. Webhook (Razorpay -> us, no user auth)",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "Razorpay Webhook (needs real X-Razorpay-Signature to pass)",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/payments/webhook",
+          "params": [],
+          "headers": [
+            { "key": "Content-Type", "value": "application/json", "active": true },
+            { "key": "X-Razorpay-Signature", "value": "", "active": true }
+          ],
+          "auth": { "authType": "none", "authActive": true },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"event\": \"payment.captured\",\n  \"payload\": {}\n}"
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": { "authType": "inherit", "authActive": true },
+  "headers": []
+}

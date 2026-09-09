@@ -1,0 +1,159 @@
+{
+  "v": 6,
+  "name": "ConnectHub - Notification Service",
+  "folders": [
+    {
+      "v": 6,
+      "name": "1. Notifications",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "Send Notification",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/notifications",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"recipientId\": <<userId>>,\n  \"actorId\": <<userId>>,\n  \"type\": \"SYSTEM\",\n  \"title\": \"Welcome!\",\n  \"message\": \"Thanks for testing ConnectHub via Hoppscotch\"\n}"
+          },
+          "preRequestScript": "",
+          "testScript": "pw.test(\"Status is 201\", () => pw.expect(pw.response.status).toBe(201));\nif (pw.response.body.notificationId) {\n  pw.env.set(\"notificationId\", pw.response.body.notificationId);\n}"
+        },
+        {
+          "v": "1",
+          "name": "Get Notifications For User",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/notifications/user/<<userId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Mark One Read",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/api/v1/notifications/<<notificationId>>/read",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Mark All Read",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/api/v1/notifications/user/<<userId>>/read-all",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Unread Count",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/notifications/user/<<userId>>/unread-count",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Delete Notification",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/api/v1/notifications/<<notificationId>>",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    },
+    {
+      "v": 6,
+      "name": "2. Email Preferences",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "Get Email Preference",
+          "method": "GET",
+          "endpoint": "<<baseUrl>>/api/v1/notifications/email-preferences",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Update Email Preference",
+          "method": "PUT",
+          "endpoint": "<<baseUrl>>/api/v1/notifications/email-preferences",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"emailNotificationsEnabled\": false\n}"
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    },
+    {
+      "v": 6,
+      "name": "3. Device Tokens (FCM)",
+      "folders": [],
+      "requests": [
+        {
+          "v": "1",
+          "name": "Register Device Token",
+          "method": "POST",
+          "endpoint": "<<baseUrl>>/api/v1/notifications/device-token",
+          "params": [],
+          "headers": [{ "key": "Content-Type", "value": "application/json", "active": true }],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": {
+            "contentType": "application/json",
+            "body": "{\n  \"fcmToken\": \"test-fcm-token-123\",\n  \"platform\": \"WEB\"\n}"
+          },
+          "preRequestScript": "",
+          "testScript": ""
+        },
+        {
+          "v": "1",
+          "name": "Remove Device Token",
+          "method": "DELETE",
+          "endpoint": "<<baseUrl>>/api/v1/notifications/device-token/test-fcm-token-123",
+          "params": [],
+          "headers": [],
+          "auth": { "authType": "bearer", "authActive": true, "token": "<<accessToken>>" },
+          "body": { "contentType": null, "body": null },
+          "preRequestScript": "",
+          "testScript": ""
+        }
+      ]
+    }
+  ],
+  "requests": [],
+  "auth": { "authType": "inherit", "authActive": true },
+  "headers": []
+}
