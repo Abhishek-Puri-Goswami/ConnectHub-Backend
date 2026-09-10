@@ -8,10 +8,13 @@ every service already read `REDIS_HOST=localhost` and defaulted
 `KAFKA_BROKERS` to `localhost:9092`, so a native instance on the same port is
 indistinguishable to the app from the Dockerized one.
 
-Installs already present at `D:\redis` (a Cygwin-based Windows Redis port,
-`redis-server.exe` + `redis.conf`) and `D:\kafka` (standard Apache Kafka
-3.x distribution, KRaft mode — no ZooKeeper, matching how the old
-`apache/kafka:3.7.0` Docker image was configured).
+Installs already present at `D:\redis` (Redis 8.10.0, from the
+[redis-windows/redis-windows](https://github.com/redis-windows/redis-windows)
+project — `redis-server.exe` + `redis.conf`; still Cygwin-based under the
+hood, which is why the path-mangling gotcha below exists) and `D:\kafka`
+(Apache Kafka 3.6.0, KRaft mode — no ZooKeeper, matching how the old
+`apache/kafka:3.7.0` Docker image was configured; the exact version differs
+slightly but KRaft-mode config is compatible across the 3.x line).
 
 ## Starting them
 
