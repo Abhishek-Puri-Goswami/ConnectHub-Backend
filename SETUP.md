@@ -68,10 +68,53 @@ short version:
 - **Zipkin (optional — tracing only, nothing breaks without it)**: download
   the self-contained jar per `Native_Zipkin.md`, extract to `D:\zipkin`.
 
-If your paths differ from `D:\redis` / `D:\kafka` / `D:\zipkin`, edit the
-three `Start-Process` lines in `start-backend.ps1` to match.
+## 5. Edit `start-backend.ps1` for your machine
 
-## 5. Create the MySQL databases
+`start-backend.ps1` currently has the paths from the machine this project
+was set up on hardcoded into it — your JDK install location and wherever
+you put Redis/Kafka/Zipkin in step 4 almost certainly won't match. Open the
+script and edit these 4 spots before running it (search the file for
+`D:\` — every hit is one of these):
+
+1. **JAVA_HOME**, near the top:
+   ```powershell
+   $env:JAVA_HOME = "C:\Program Files\Java\latest\jdk-21"
+   ```
+   Change to wherever you installed the JDK, e.g.
+   `C:\Program Files\Eclipse Adoptium\jdk-17.0.x-hotspot`.
+
+2. **Redis** — the line starting `Start-Process "D:\redis\redis-server.exe"`:
+   update both `D:\redis\redis-server.exe` and the
+   `-WorkingDirectory "D:\redis"` right after it to wherever you extracted
+   Redis. Both must point at the *same* folder — `redis-server.exe` needs
+   its config file passed as a relative path from its own directory (see
+   `Native_Redis_Kafka.md` for why; passing an absolute path here breaks
+   it in a confusing way).
+
+3. **Kafka** — the line starting
+   `$kafkaWrapper = Start-Process "D:\kafka\bin\windows\kafka-server-start.bat"`:
+   three references to update together —
+   `D:\kafka\bin\windows\kafka-server-start.bat`,
+   `D:\kafka\config\kraft\server.properties`, and
+   `-WorkingDirectory "D:\kafka"`.
+
+4. **Zipkin** — inside the `if ($startZipkin)` block: update
+   `D:\zipkin\zipkin-server-exec.jar` and `-WorkingDirectory "D:\zipkin"`.
+   If you skipped installing Zipkin in step 4, set `$startZipkin = $false`
+   instead so the script doesn't try to launch a jar that isn't there.
+
+`stop-backend.ps1` needs **no edits** — it only kills whatever PIDs
+`start-backend.ps1` recorded to `backend-pids.csv`, so it works regardless
+of where anything is actually installed.
+
+One more thing that trips people up: both scripts assume you're running
+them from the `connecthub-backend` repo root
+(`cd connecthub-backend; .\start-backend.ps1`) — the service jar paths
+(`service-registry/target/...`) and `backend-pids.csv` are relative to
+wherever you launch the script *from*, not to the script's own location on
+disk.
+
+## 6. Create the MySQL databases
 
 Using the root password you set in step 3:
 ```sql
@@ -102,7 +145,7 @@ FLUSH PRIVILEGES;
 You don't need to create tables — Flyway migrations run automatically the
 first time each service starts.
 
-## 6. Backend `.env` — obtaining every credential
+## 7. Backend `.env` — obtaining every credential
 
 ```bash
 cd connecthub-backend
@@ -117,7 +160,7 @@ openssl rand -base64 64
 (No `openssl` on Windows? Use Git Bash, which ships with it, or PowerShell:
 `[Convert]::ToBase64String((1..64 | ForEach-Object { Get-Random -Max 256 }))`)
 
-**MySQL** — use the `dbadmin` user/password you created in step 5, and the
+**MySQL** — use the `dbadmin` user/password you created in step 6, and the
 root password from step 3 for `MYSQL_ROOT_PASSWORD`.
 
 **EUREKA_PASSWORD / ADMIN_PASSWORD** — any password you choose; these
@@ -125,7 +168,7 @@ protect the Eureka dashboard and Spring Boot Admin respectively.
 
 **PLATFORM_ADMIN_EMAIL / PASSWORD** — the account auto-created on
 `auth-service`'s first boot. Choose your own. Note: it's seeded with role
-`ADMIN`, not `PLATFORM_ADMIN` — see step 9 below to promote it.
+`ADMIN`, not `PLATFORM_ADMIN` — see step 11 below to promote it.
 
 **AWS S3** (media uploads — optional, media-service still starts without
 it, uploads will just fail):
@@ -197,7 +240,7 @@ the service starts cleanly without it):
 **Config Server variables** (`CONFIG_SERVER_*`, `CONFIG_REPO_*`) — leave
 commented out/blank. Not needed; see `Config_Server_Reuse.md`.
 
-## 7. Build the backend
+## 8. Build the backend
 
 ```bash
 mvn clean install -DskipTests
@@ -205,7 +248,7 @@ mvn clean install -DskipTests
 This compiles all 12 modules and produces each service's `target/*.jar` —
 required before the first run, since jars aren't committed to git.
 
-## 8. Frontend `.env.local`
+## 9. Frontend `.env.local`
 
 ```bash
 cd connecthub-frontend
@@ -214,15 +257,15 @@ cp .env.example .env.local
 ```
 Defaults already point at `localhost:8080` (the local gateway) — no
 changes needed there. Fill in:
-- `VITE_RAZORPAY_KEY_ID` — same `RAZORPAY_KEY_ID` from backend step 6
-- `VITE_RAZORPAY_PLAN_ID` — one of the plan IDs from backend step 6
-- `VITE_FIREBASE_*` — same Firebase project as backend step 6, but from
+- `VITE_RAZORPAY_KEY_ID` — same `RAZORPAY_KEY_ID` from backend step 7
+- `VITE_RAZORPAY_PLAN_ID` — one of the plan IDs from backend step 7
+- `VITE_FIREBASE_*` — same Firebase project as backend step 7, but from
   Firebase Console → Project Settings → General → Your apps → Web app
   (a different set of values than the service-account JSON — this is the
   public web config)
 - `VITE_ENABLE_PAYMENTS` — `true`/`false`, whether to show the billing UI
 
-## 9. Run everything
+## 10. Run everything
 
 ```powershell
 cd connecthub-backend
@@ -242,7 +285,7 @@ Opens at `http://localhost:5173`.
 `.\stop-backend.ps1` (from `connecthub-backend`) tears the backend down
 cleanly, Redis/Kafka/Zipkin included.
 
-## 10. First login — promoting the platform admin
+## 11. First login — promoting the platform admin
 
 Log in once with the `PLATFORM_ADMIN_EMAIL`/`PASSWORD` from your `.env` —
 this account exists but only has role `ADMIN`. To get true `PLATFORM_ADMIN`
