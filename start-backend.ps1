@@ -18,12 +18,12 @@ Write-Host "Skipping build..."
 #     exit $LASTEXITCODE
 # }
 
-Write-Host "Starting Config Server..."
-Start-Process java -ArgumentList "-jar", "config-server/target/config-server-1.0.0.jar" -WindowStyle Minimized -PassThru | Export-Csv -Path "backend-pids.csv" -NoTypeInformation -Append
-Start-Sleep -Seconds 15
+# Config Server is intentionally NOT started — no other service actually
+# consumes it (no spring-cloud-starter-config dependency, no bootstrap.yml
+# anywhere). See Config_Server_Reuse.md for why and how to bring it back.
 
 Write-Host "Starting Service Registry..."
-Start-Process java -ArgumentList "-jar", "service-registry/target/service-registry-1.0.0.jar" -WindowStyle Minimized -PassThru | Export-Csv -Path "backend-pids.csv" -NoTypeInformation -Append
+Start-Process java -ArgumentList "-Xmx300m", "-jar", "service-registry/target/service-registry-1.0.0.jar" -WindowStyle Minimized -PassThru | Export-Csv -Path "backend-pids.csv" -NoTypeInformation -Append
 Start-Sleep -Seconds 20
 
 $services = @(
@@ -41,7 +41,7 @@ $services = @(
 
 foreach ($service in $services) {
     Write-Host "Starting $service..."
-    Start-Process java -ArgumentList "-jar", "$service/target/$service-1.0.0.jar" -WindowStyle Minimized -PassThru | Export-Csv -Path "backend-pids.csv" -NoTypeInformation -Append
+    Start-Process java -ArgumentList "-Xmx300m", "-jar", "$service/target/$service-1.0.0.jar" -WindowStyle Minimized -PassThru | Export-Csv -Path "backend-pids.csv" -NoTypeInformation -Append
 }
 
 Write-Host "All services started!"

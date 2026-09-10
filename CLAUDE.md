@@ -5,6 +5,16 @@ Restore the full backend microservices stack to running order on this machine
 (native, not Docker), then build Hoppscotch collections and debug each
 service's API flows. Branch: `local-run`.
 
+**Direction confirmed by the project owner (post architecture review):** this
+is staying a single-developer, local-only, always-local deployment —
+no CI/CD, no cloud deploy target, Docker being phased out entirely
+(including Kafka/Redis, currently the only two things still in Docker — see
+`Native_Redis_Kafka.md`). Every simplification below should be read in that
+light: things aren't being cut because they're bad patterns in general, but
+because they don't earn their cost at this project's actual scale
+(1 developer, 3 demo accounts, one machine). See the full audit findings
+from this session for the reasoning if that context is ever needed again.
+
 ## Why native instead of Docker for the app services
 `.env` already points `MYSQL_HOST` / `REDIS_HOST` / `EUREKA_HOST` at
 `localhost`, and untracked `start-backend.ps1` / `stop-backend.ps1` run each
@@ -36,30 +46,39 @@ deleted-but-uncommitted at the start of this effort and were restored via
   machine has had multiple unplanned restarts/hangs during this effort, so
   always verify `docker info` succeeds before assuming containers are up.
 
-## Boot order (per original microservice build order)
-`config-server` → `service-registry` → `api-gateway` → `auth-service` →
-`room-service` → `message-service` → `media-service` → `presence-service` →
+## Boot order
+`service-registry` → `api-gateway` → `auth-service` → `room-service` →
+`message-service` → `media-service` → `presence-service` →
 `notification-service` → `websocket-service` → `payment-service` →
 `admin-server`.
 
-Each is started via `Start-Process java -jar <module>/target/<module>-1.0.0.jar`
+**`config-server` is intentionally NOT started** — verified that no other
+service actually depends on it (no `spring-cloud-starter-config` anywhere
+else, no `bootstrap.yml`, zero references to `CONFIG_SERVER_HOST`/`8888`
+outside its own module and the inert `docker-compose.yml` env vars). It was
+in the original boot order under an unverified assumption carried over from
+Docker Compose's `depends_on` graph. See `Config_Server_Reuse.md` for the
+full finding and how to bring it back for a demo later.
+
+Each is started via `Start-Process java -Xmx300m -jar <module>/target/<module>-1.0.0.jar`
 after loading `.env` into the process environment (same pattern as
 `start-backend.ps1`), with stdout/stderr redirected to `logs/<module>-out.log`
 / `-err.log`. Verify each one with `curl http://localhost:<port>/actuator/health`
-before starting the next — don't parallelize boot, config-server and
-service-registry are hard dependencies for everything else.
+before starting the next — don't parallelize boot, `service-registry` is a
+hard dependency for everything else's Eureka registration.
 
-Ports: config-server 8888, service-registry 8761, api-gateway 8080,
-auth 8081, room 8082, message 8083, media 8084, presence 8085,
-notification 8086, websocket 8087, payment 8088 (admin-server port TBD).
+Ports: service-registry 8761, api-gateway 8080, auth 8081, room 8082,
+message 8083, media 8084, presence 8085, notification 8086, websocket 8087,
+payment 8088, admin-server 9090. (config-server 8888 exists but isn't part
+of the normal boot — see above.)
 
 ## Known-good fixes already applied (in `.env`, not committed — gitignored)
 - `CONFIG_REPO_PASSWORD` — old GitHub PAT had expired (401 from GitHub
   itself). Replaced with a new classic PAT with `repo` scope (fine-grained
   tokens need explicit per-repo access, which caused a confusing 404 the
-  first time). config-server clones
-  `https://github.com/Abhishek-Puri-Goswami/ConnectHub-Config-Server.git` at
-  startup — needs internet + this token to be valid.
+  first time). **No longer load-bearing** now that config-server is disabled
+  (see boot order above) — kept documented in case config-server is
+  reactivated for a demo per `Config_Server_Reuse.md`.
 
 ## Resolved issues
 - **`notification-service` mail health** — was DOWN (`535 5.7.8
@@ -97,16 +116,34 @@ payment, admin-server) were started with `-Xmx300m` to control the RAM
 budget under load — worth applying to all 11 on the next full restart, not
 just the tail end, for a cleaner baseline.
 
-## Not yet done
-- Hoppscotch collections not yet built.
-- Frontend (`connecthub-frontend`, separate working directory) not yet
-  brought into the loop.
-- **RAM usage reduction — deferred until debugging work is done.** The
-  `-Xmx300m` cap is a stopgap, not a real fix. Revisit: trimming unused
-  Spring Boot autoconfig, disabling Zipkin tracing export noise since no
-  collector is running locally (`MANAGEMENT_ZIPKIN_TRACING_ENABLED` is set
-  for Docker compose but not currently for native runs, so every service
-  wastes cycles/log noise retrying `localhost:9411`), and deciding on a
-  permanent per-service `-Xmx` baked into the start script rather than an
-  ad-hoc flag. Until then: only run the services the current task actually
-  needs, don't leave all 11 up when not actively testing across services.
+## Done since the architecture review
+- Hoppscotch collections built — 9 collections covering every service, see
+  `hoppscotch/`.
+- Frontend brought into the loop and verified end-to-end (real login through
+  the actual running backend, not mocked).
+- Subscription tier enforcement bug fixed (PREMIUM/PLATINUM were silently
+  falling through to FREE limits) + the FREE/PRO limit model finalized
+  (group rooms, members/room, storage, max file size — message rate is now
+  a uniform anti-abuse limit, not tier-gated) + regression tests added.
+- Config Server disabled (never actually consumed by anything — see
+  `Config_Server_Reuse.md`).
+- `deploy.yml` (EC2 deploy) and `sonarcloud.yml` deleted from both repos'
+  `.github/workflows/` — confirmed no CI/CD or cloud deploy target going
+  forward, everything runs locally. Both `.github/` directories removed
+  entirely (nothing else was in them).
+
+## Not yet done (in progress, P1 of the post-audit plan)
+- Native Redis + Kafka instead of Docker — installs present at `D:\kafka`
+  and `D:\redis`, see `Native_Redis_Kafka.md` for the setup steps once
+  actually switched over.
+- Stand up native Zipkin (steps in `Native_Redis_Kafka.md`'s sibling doc,
+  once written) — tracing is already enabled by default in the native run
+  with nowhere to send spans, which is why services spam
+  `Connection refused: localhost:9411` in their logs today. Fall back to
+  `MANAGEMENT_ZIPKIN_TRACING_ENABLED=false` in `.env` if RAM doesn't permit
+  running it.
+- Frontend marketing copy fix (conflates OAuth2 auth with encryption).
+- **RAM usage reduction** — the `-Xmx300m` cap (now applied to all 11
+  services via `start-backend.ps1`, not just the tail end) is a stopgap.
+  Only run the services the current task actually needs; don't leave all 11
+  up when not actively testing across services.
