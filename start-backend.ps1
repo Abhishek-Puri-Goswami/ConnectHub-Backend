@@ -41,6 +41,17 @@ if ($kafkaJava) {
 }
 Start-Sleep -Seconds 4
 
+# Zipkin tracing. Every service already tries to export spans here by default
+# (localhost:9411, see application.yml) - without this running they just log
+# harmless "Connection refused" noise. Toggle off if RAM gets tight; nothing
+# else needs to change since services already degrade gracefully without it.
+$startZipkin = $true
+if ($startZipkin) {
+    Write-Host "Starting Zipkin..."
+    Start-Process java -ArgumentList "-Xmx300m", "-jar", "D:\zipkin\zipkin-server-exec.jar" -WorkingDirectory "D:\zipkin" -WindowStyle Minimized -PassThru | Export-Csv -Path "backend-pids.csv" -NoTypeInformation -Append
+    Start-Sleep -Seconds 5
+}
+
 Write-Host "Starting Service Registry..."
 Start-Process java -ArgumentList "-Xmx300m", "-jar", "service-registry/target/service-registry-1.0.0.jar" -WindowStyle Minimized -PassThru | Export-Csv -Path "backend-pids.csv" -NoTypeInformation -Append
 Start-Sleep -Seconds 20

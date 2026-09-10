@@ -27,12 +27,18 @@ one machine). Branch: `local-run`.
   reformat the log dir — it's disposable local data).
 - `docker-compose.yml` / `docker-compose.infra.yml` still exist and still
   work as a fallback if ever needed, but aren't the active path.
+- **Zipkin**: native, `D:\zipkin\zipkin-server-exec.jar`. Every service
+  already tries to export spans to it by default (that's why they used to
+  log `Connection refused: localhost:9411` noise) — starting it required
+  zero service-side changes. See `Native_Zipkin.md` for the RAM cost
+  measured on this machine and the `$startZipkin` toggle in
+  `start-backend.ps1` if that ever needs disabling again.
 
 ## Boot order
-`service-registry` → `api-gateway` → `auth-service` → `room-service` →
-`message-service` → `media-service` → `presence-service` →
-`notification-service` → `websocket-service` → `payment-service` →
-`admin-server`. Redis and Kafka start first, ahead of all of these.
+Redis, Kafka, and Zipkin start first, then: `service-registry` →
+`api-gateway` → `auth-service` → `room-service` → `message-service` →
+`media-service` → `presence-service` → `notification-service` →
+`websocket-service` → `payment-service` → `admin-server`.
 
 **`config-server` is not part of the boot at all** — verified that no other
 service actually depends on it (no `spring-cloud-starter-config` anywhere
@@ -50,8 +56,8 @@ Verified via a full clean-slate stop/start cycle — all 11 report healthy at
 
 Ports: service-registry 8761, api-gateway 8080, auth 8081, room 8082,
 message 8083, media 8084, presence 8085, notification 8086, websocket 8087,
-payment 8088, admin-server 9090, Redis 6379, Kafka 9092. (config-server
-8888 exists but isn't part of the normal boot.)
+payment 8088, admin-server 9090, Redis 6379, Kafka 9092, Zipkin 9411.
+(config-server 8888 exists but isn't part of the normal boot.)
 
 ## Known-good fixes already applied (in `.env`, not committed — gitignored)
 - `CONFIG_REPO_PASSWORD` — old GitHub PAT had expired. **No longer
@@ -124,19 +130,17 @@ they don't get re-litigated or accidentally reverted later:
 - `deploy.yml` (EC2 deploy) and `sonarcloud.yml` deleted from both repos'
   `.github/workflows/`; both `.github/` directories removed entirely.
 - Kafka and Redis switched from Docker to native — see `Native_Redis_Kafka.md`.
+- Zipkin stood up natively — see `Native_Zipkin.md`. Verified real traces
+  flowing (not just "server is up") via Zipkin's own API; 8 services were
+  already trying to export spans and started succeeding immediately, no
+  service-side changes needed. Wired into `start-backend.ps1`.
 - Frontend marketing copy fixed (was conflating OAuth2 authentication with
   encryption — now correctly attributes both claims separately).
 - 3 real demo accounts seeded through actual API flows (not hand-inserted)
   — see `DETAILS.md` (gitignored, contains real credentials).
 
 ## Not yet done
-- **Native Zipkin** — tracing is already enabled by default in the native
-  run with nowhere to send spans, which is why services spam
-  `Connection refused: localhost:9411` in their logs today. Plan: run
-  Zipkin's self-contained executable jar locally (`java -jar
-  zipkin-server-*-exec.jar`, default port 9411, matches `.env`'s
-  `ZIPKIN_URL`). Fall back to `MANAGEMENT_ZIPKIN_TRACING_ENABLED=false` in
-  `.env` if RAM doesn't permit running it alongside everything else.
 - **RAM usage reduction beyond the `-Xmx300m` stopgap** — still not a real
-  fix, just a bound. Revisit trimming unused Spring Boot autoconfig if RAM
-  pressure becomes a recurring problem again.
+  fix, just a bound. Currently stable at ~2.5-3.2GB free with everything
+  running (11 services + Redis + Kafka + Zipkin). Revisit trimming unused
+  Spring Boot autoconfig if RAM pressure becomes a recurring problem again.
