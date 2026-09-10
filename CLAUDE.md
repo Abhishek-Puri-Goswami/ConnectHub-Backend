@@ -1,149 +1,142 @@
 # ConnectHub Backend — Local Run Context
 
-## Aim (current effort)
-Restore the full backend microservices stack to running order on this machine
-(native, not Docker), then build Hoppscotch collections and debug each
-service's API flows. Branch: `local-run`.
+## Direction
+Single-developer, local-only, always-local deployment. No CI/CD, no cloud
+deploy target, no Docker (MySQL, Redis, and Kafka are all native now —
+Docker Desktop isn't needed for anything in this project anymore). Every
+simplification in this file should be read in that light: things weren't
+cut because they're bad patterns in general, but because they don't earn
+their cost at this project's actual scale (1 developer, 3 demo accounts,
+one machine). Branch: `local-run`.
 
-**Direction confirmed by the project owner (post architecture review):** this
-is staying a single-developer, local-only, always-local deployment —
-no CI/CD, no cloud deploy target, Docker being phased out entirely
-(including Kafka/Redis, currently the only two things still in Docker — see
-`Native_Redis_Kafka.md`). Every simplification below should be read in that
-light: things aren't being cut because they're bad patterns in general, but
-because they don't earn their cost at this project's actual scale
-(1 developer, 3 demo accounts, one machine). See the full audit findings
-from this session for the reasoning if that context is ever needed again.
-
-## Why native instead of Docker for the app services
-`.env` already points `MYSQL_HOST` / `REDIS_HOST` / `EUREKA_HOST` at
-`localhost`, and untracked `start-backend.ps1` / `stop-backend.ps1` run each
-service as a plain `java -jar`. MySQL runs as a native Windows service
-(`MySQL80`). Kafka + Redis run in Docker (see below) since there's no native
-install for them on this machine. The Dockerfiles/compose files were found
-deleted-but-uncommitted at the start of this effort and were restored via
-`git checkout` — they still exist and work, just aren't the active path.
-
-## Infra
-- **MySQL**: native Windows service `MySQL80`, always running independent of
-  this project. 6 databases already provisioned: `connecthub_auth`,
-  `connecthub_room`, `connecthub_message`, `connecthub_media`,
-  `connecthub_notification`, `connecthub_payment`, plus app user `dbadmin`
-  (see `.env` for creds). Re-run grants from `init-databases.sh` if a DB/user
-  ever needs recreating (adapt for native `mysql.exe`, not the container
-  script as-is).
-- **Kafka + Redis**: Docker containers, brought up via:
-  ```bash
-  docker compose -f docker-compose.yml -f docker-compose.infra.yml up -d kafka redis
-  ```
-  `docker-compose.infra.yml` (new file, part of this effort) publishes
-  `9092:9092` (kafka) and `6379:6379` (redis) and overrides Kafka's
-  `KAFKA_ADVERTISED_LISTENERS` to `localhost:9092` — the base compose file
-  only exposes Kafka inside the docker network and maps Redis to `6385`,
-  neither of which native JVM processes on the host could reach.
-- **Docker Desktop must be started manually** (`Start-Process "C:\Program
-  Files\Docker\Docker\Docker Desktop.exe"`) — it does not auto-start, and this
-  machine has had multiple unplanned restarts/hangs during this effort, so
-  always verify `docker info` succeeds before assuming containers are up.
+## Infra — all native, zero Docker
+- **MySQL**: native Windows service `MySQL80`, always running independent
+  of this project. 6 databases: `connecthub_auth`, `connecthub_room`,
+  `connecthub_message`, `connecthub_media`, `connecthub_notification`,
+  `connecthub_payment`, plus app user `dbadmin` (see `.env` for creds).
+  Re-run grants from `init-databases.sh` if a DB/user ever needs recreating
+  (adapt for native `mysql.exe`, not the container script as-is).
+- **Redis**: native, `D:\redis\redis-server.exe`. Started automatically by
+  `start-backend.ps1`. See `Native_Redis_Kafka.md` for the Cygwin
+  path-mangling gotcha if starting it manually.
+- **Kafka**: native, `D:\kafka` (KRaft mode, single node). Started
+  automatically by `start-backend.ps1`, which also correctly captures the
+  real `java.exe` child PID (not the `.bat` wrapper's PID) so
+  `stop-backend.ps1` doesn't orphan it. See `Native_Redis_Kafka.md` for the
+  Windows file-locking crash this hit once and how it was fixed (wipe +
+  reformat the log dir — it's disposable local data).
+- `docker-compose.yml` / `docker-compose.infra.yml` still exist and still
+  work as a fallback if ever needed, but aren't the active path.
 
 ## Boot order
 `service-registry` → `api-gateway` → `auth-service` → `room-service` →
 `message-service` → `media-service` → `presence-service` →
 `notification-service` → `websocket-service` → `payment-service` →
-`admin-server`.
+`admin-server`. Redis and Kafka start first, ahead of all of these.
 
-**`config-server` is intentionally NOT started** — verified that no other
+**`config-server` is not part of the boot at all** — verified that no other
 service actually depends on it (no `spring-cloud-starter-config` anywhere
 else, no `bootstrap.yml`, zero references to `CONFIG_SERVER_HOST`/`8888`
-outside its own module and the inert `docker-compose.yml` env vars). It was
-in the original boot order under an unverified assumption carried over from
-Docker Compose's `depends_on` graph. See `Config_Server_Reuse.md` for the
-full finding and how to bring it back for a demo later.
+outside its own module). It was originally assumed to be a hard dependency,
+carried over unverified from Docker Compose's `depends_on` graph. See
+`Config_Server_Reuse.md` for the full finding and how to reactivate it for
+a demo later if ever wanted.
 
-Each is started via `Start-Process java -Xmx300m -jar <module>/target/<module>-1.0.0.jar`
-after loading `.env` into the process environment (same pattern as
-`start-backend.ps1`), with stdout/stderr redirected to `logs/<module>-out.log`
-/ `-err.log`. Verify each one with `curl http://localhost:<port>/actuator/health`
-before starting the next — don't parallelize boot, `service-registry` is a
-hard dependency for everything else's Eureka registration.
+**One command does the whole thing**: `.\start-backend.ps1` (loads `.env`,
+starts Redis, Kafka, then all 11 services in order, each with `-Xmx300m`).
+`.\stop-backend.ps1` tears it all down cleanly, Redis/Kafka included.
+Verified via a full clean-slate stop/start cycle — all 11 report healthy at
+`http://localhost:<port>/actuator/health`.
 
 Ports: service-registry 8761, api-gateway 8080, auth 8081, room 8082,
 message 8083, media 8084, presence 8085, notification 8086, websocket 8087,
-payment 8088, admin-server 9090. (config-server 8888 exists but isn't part
-of the normal boot — see above.)
+payment 8088, admin-server 9090, Redis 6379, Kafka 9092. (config-server
+8888 exists but isn't part of the normal boot.)
 
 ## Known-good fixes already applied (in `.env`, not committed — gitignored)
-- `CONFIG_REPO_PASSWORD` — old GitHub PAT had expired (401 from GitHub
-  itself). Replaced with a new classic PAT with `repo` scope (fine-grained
-  tokens need explicit per-repo access, which caused a confusing 404 the
-  first time). **No longer load-bearing** now that config-server is disabled
-  (see boot order above) — kept documented in case config-server is
-  reactivated for a demo per `Config_Server_Reuse.md`.
-
-## Resolved issues
-- **`notification-service` mail health** — was DOWN (`535 5.7.8
-  BadCredentials`) with two earlier Gmail accounts/app-passwords. Fixed:
-  `MAIL_USERNAME=ap.goswami.2854@gmail.com` with a valid app password.
-  Verified both via raw `curl smtps://smtp.gmail.com:465` AUTH PLAIN (`235
-  Accepted`) and via the service's own `/actuator/health` (`mail: UP`).
-  If mail breaks again, re-verify with the same raw curl check before
-  touching app config — isolates Gmail-side rejection from app bugs.
+- `CONFIG_REPO_PASSWORD` — old GitHub PAT had expired. **No longer
+  load-bearing** now that config-server is disabled — kept documented in
+  case config-server is reactivated per `Config_Server_Reuse.md`.
+- `MAIL_USERNAME=ap.goswami.2854@gmail.com` with a valid Gmail app
+  password — `notification-service` mail health was DOWN twice before this
+  with expired/wrong credentials. If mail breaks again, verify with a raw
+  `curl smtps://smtp.gmail.com:465` AUTH PLAIN check before touching app
+  config — isolates Gmail-side rejection from app bugs.
 
 ## Environment stability — RAM matters
-This machine has ~15.4GB RAM and hit 90% usage / hung once with all 9+
-services running alongside Docker Desktop. **Don't run more services
-simultaneously than the current task needs.** Each JVM idles around
-250-600MB. Stop services with `taskkill //PID <pid> //F` (PIDs logged to
-`logs/<module>.pid` and echoed when started) when done debugging one, rather
-than leaving everything up. This machine has also had at least one full
-force-shutdown during this effort — after any restart, assume Docker,
-all Java processes, and Docker containers are gone and MySQL (native
-service) is the only thing that survives; re-verify from scratch rather than
-assuming prior state.
+This machine has ~15.4GB RAM and has hung once running the full stack
+alongside Docker Desktop (before the Docker removal above). Every service
+now starts with `-Xmx300m` via `start-backend.ps1`. Still: **don't run more
+services than the current task needs** — stop what you're not using rather
+than leaving all 11 up indefinitely. This machine has had at least one full
+force-shutdown historically — after any restart, assume nothing is running
+except the native MySQL Windows service, and re-verify from scratch rather
+than assuming prior state.
 
-## Status: all 11 services restored and fully healthy
-As of this pass, the full stack is up: config-server, service-registry,
-api-gateway, auth-service, room-service, message-service, media-service,
-presence-service, notification-service, websocket-service, payment-service,
-admin-server (port 9090). All registered with Eureka, all green including
-mail. Confirmed stable at ~1.7GB free RAM (~10.5%) — tight but not
-degrading.
+## Product decisions from the architecture review (this session)
 
-To bring the whole stack up from a cold state (Docker Desktop closed, no
-java processes running — the normal state after this machine reboots or
-hangs), repeat the boot order above. Services 8-11 (presence, websocket,
-payment, admin-server) were started with `-Xmx300m` to control the RAM
-budget under load — worth applying to all 11 on the next full restart, not
-just the tail end, for a cleaner baseline.
+A full PM/architect/security audit was run against this project and its
+findings drove most of the simplification work below. Key decisions, so
+they don't get re-litigated or accidentally reverted later:
+
+- **Subscription tiers are FREE vs PRO (paid)**, not three separate tiers
+  with different limits — `PREMIUM` and `PLATINUM` both map to the same
+  "paid" limit bucket in `message-service`/`media-service`/`room-service`.
+  The account-level role system still distinguishes `PREMIUM`/`PLATINUM`
+  (that's a billing/display detail), but the actual enforced limits only
+  have two tiers.
+- **Finalized limit model** (implemented, tested): group rooms 5/500,
+  members per room 25/250, storage 100MB/10GB, max file size 10MB/250MB.
+  **Message rate limiting is deliberately NOT tier-gated** — it's a
+  uniform 60/min anti-abuse limit for everyone. Gating core conversational
+  throughput behind a paywall makes FREE feel broken rather than limited,
+  which is the wrong trade for a chat product.
+- **Deferred to "Phase 2 — implement only if there's real demand"**:
+  message history retention windows, advanced search, scheduled messages.
+  These aren't limit tweaks — each needs real subsystem design (retention
+  policy decisions, search infrastructure, a delivery scheduler) that isn't
+  justified without evidence anyone wants them yet.
+- **Razorpay integration: paused, not abandoned.** The payment/subscription
+  flow (`payment-service`, Razorpay order/verify/cancel, webhook handling)
+  is functionally complete and was the thing the tier-enforcement bug
+  above was found in. No further engineering investment here until there's
+  a real monetization need — it's real payment-gateway surface area and
+  worth minimizing until it's actually gating real revenue.
+- **Five login methods** (password, email OTP, phone OTP, Google OAuth,
+  GitHub OAuth) are intentional — kept for demonstration purposes, not a
+  gap to trim.
+- **`presence-service` stays a separate service** — room for future scope
+  beyond its current small footprint, not folded into `websocket-service`.
+- **Admin analytics dashboard stays as-is**, no further investment — it's
+  already appropriately lightweight (reuses existing counters), just not
+  worth expanding without a reason to check it more.
+- **Local SonarQube stays** (`docker-compose.sonarqube.yml`) as the ongoing
+  quality-gate tool; SonarCloud CI was removed along with all other CI/CD.
 
 ## Done since the architecture review
 - Hoppscotch collections built — 9 collections covering every service, see
   `hoppscotch/`.
-- Frontend brought into the loop and verified end-to-end (real login through
-  the actual running backend, not mocked).
-- Subscription tier enforcement bug fixed (PREMIUM/PLATINUM were silently
-  falling through to FREE limits) + the FREE/PRO limit model finalized
-  (group rooms, members/room, storage, max file size — message rate is now
-  a uniform anti-abuse limit, not tier-gated) + regression tests added.
-- Config Server disabled (never actually consumed by anything — see
-  `Config_Server_Reuse.md`).
+- Frontend brought into the loop and verified end-to-end (real login
+  through the actual running backend, not mocked).
+- Subscription tier enforcement bug fixed + FREE/PRO limit model finalized
+  + regression tests added (see Product decisions above).
+- Config Server disabled — see `Config_Server_Reuse.md`.
 - `deploy.yml` (EC2 deploy) and `sonarcloud.yml` deleted from both repos'
-  `.github/workflows/` — confirmed no CI/CD or cloud deploy target going
-  forward, everything runs locally. Both `.github/` directories removed
-  entirely (nothing else was in them).
+  `.github/workflows/`; both `.github/` directories removed entirely.
+- Kafka and Redis switched from Docker to native — see `Native_Redis_Kafka.md`.
+- Frontend marketing copy fixed (was conflating OAuth2 authentication with
+  encryption — now correctly attributes both claims separately).
+- 3 real demo accounts seeded through actual API flows (not hand-inserted)
+  — see `DETAILS.md` (gitignored, contains real credentials).
 
-## Not yet done (in progress, P1 of the post-audit plan)
-- Native Redis + Kafka instead of Docker — installs present at `D:\kafka`
-  and `D:\redis`, see `Native_Redis_Kafka.md` for the setup steps once
-  actually switched over.
-- Stand up native Zipkin (steps in `Native_Redis_Kafka.md`'s sibling doc,
-  once written) — tracing is already enabled by default in the native run
-  with nowhere to send spans, which is why services spam
-  `Connection refused: localhost:9411` in their logs today. Fall back to
-  `MANAGEMENT_ZIPKIN_TRACING_ENABLED=false` in `.env` if RAM doesn't permit
-  running it.
-- Frontend marketing copy fix (conflates OAuth2 auth with encryption).
-- **RAM usage reduction** — the `-Xmx300m` cap (now applied to all 11
-  services via `start-backend.ps1`, not just the tail end) is a stopgap.
-  Only run the services the current task actually needs; don't leave all 11
-  up when not actively testing across services.
+## Not yet done
+- **Native Zipkin** — tracing is already enabled by default in the native
+  run with nowhere to send spans, which is why services spam
+  `Connection refused: localhost:9411` in their logs today. Plan: run
+  Zipkin's self-contained executable jar locally (`java -jar
+  zipkin-server-*-exec.jar`, default port 9411, matches `.env`'s
+  `ZIPKIN_URL`). Fall back to `MANAGEMENT_ZIPKIN_TRACING_ENABLED=false` in
+  `.env` if RAM doesn't permit running it alongside everything else.
+- **RAM usage reduction beyond the `-Xmx300m` stopgap** — still not a real
+  fix, just a bound. Revisit trimming unused Spring Boot autoconfig if RAM
+  pressure becomes a recurring problem again.
