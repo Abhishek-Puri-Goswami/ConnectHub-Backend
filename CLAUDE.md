@@ -113,9 +113,12 @@ they don't get re-litigated or accidentally reverted later:
   gap to trim.
 - **`presence-service` stays a separate service** — room for future scope
   beyond its current small footprint, not folded into `websocket-service`.
-- **Admin analytics dashboard stays as-is**, no further investment — it's
-  already appropriately lightweight (reuses existing counters), just not
-  worth expanding without a reason to check it more.
+- **Admin analytics dashboard stays as-is**, no further investment right
+  now — turns out to already be more complete than first assessed (every
+  field it collects is already charted). See
+  `Admin_Analytics_Expansion_Plan.md` for a tiered reference plan (what
+  reuses existing data vs. what needs real new subsystems) if this ever
+  gets picked up.
 - **Local SonarQube stays** (`docker-compose.sonarqube.yml`) as the ongoing
   quality-gate tool; SonarCloud CI was removed along with all other CI/CD.
 
