@@ -22,6 +22,25 @@ Write-Host "Skipping build..."
 # consumes it (no spring-cloud-starter-config dependency, no bootstrap.yml
 # anywhere). See Config_Server_Reuse.md for why and how to bring it back.
 
+Write-Host "Starting Redis..."
+Start-Process "D:\redis\redis-server.exe" -ArgumentList "redis.conf", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru" -WorkingDirectory "D:\redis" -WindowStyle Minimized -PassThru | Export-Csv -Path "backend-pids.csv" -NoTypeInformation -Append
+
+Write-Host "Starting Kafka..."
+$env:KAFKA_HEAP_OPTS = "-Xmx256m -Xms128m"
+# Start-Process on a .bat captures the cmd.exe wrapper PID, not the real
+# java.exe broker process it spawns. Capture the actual child java.exe PID
+# instead so stop-backend.ps1 stops the real process, not just the wrapper.
+$kafkaWrapper = Start-Process "D:\kafka\bin\windows\kafka-server-start.bat" -ArgumentList "D:\kafka\config\kraft\server.properties" -WorkingDirectory "D:\kafka" -WindowStyle Minimized -PassThru
+Start-Sleep -Seconds 6
+$kafkaJava = Get-CimInstance Win32_Process -Filter "ParentProcessId=$($kafkaWrapper.Id)" | Where-Object { $_.Name -eq "java.exe" }
+if ($kafkaJava) {
+    [PSCustomObject]@{ Id = $kafkaJava.ProcessId } | Export-Csv -Path "backend-pids.csv" -NoTypeInformation -Append -Force
+} else {
+    Write-Warning "Could not find Kafka java.exe child process - it may need to be stopped manually if stop-backend.ps1 does not catch it."
+    [PSCustomObject]@{ Id = $kafkaWrapper.Id } | Export-Csv -Path "backend-pids.csv" -NoTypeInformation -Append -Force
+}
+Start-Sleep -Seconds 4
+
 Write-Host "Starting Service Registry..."
 Start-Process java -ArgumentList "-Xmx300m", "-jar", "service-registry/target/service-registry-1.0.0.jar" -WindowStyle Minimized -PassThru | Export-Csv -Path "backend-pids.csv" -NoTypeInformation -Append
 Start-Sleep -Seconds 20
