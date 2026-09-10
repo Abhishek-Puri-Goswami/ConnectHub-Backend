@@ -38,7 +38,8 @@ import java.util.UUID;
  * UPLOAD FLOW (upload() method):
  *   1. RATE LIMIT: Check the per-minute upload rate limit for the user's tier via
  *      MediaUploadRateLimiter (Redis INCR counter). Reject with MediaPlanLimitException if exceeded.
- *   2. BASIC VALIDATION: Reject empty files and files exceeding 2MB.
+ *   2. BASIC VALIDATION: Reject empty files and files exceeding the tier's per-file
+ *      size cap (MediaTierLimits.maxFileSizeKb — 10MB FREE, 250MB paid).
  *   3. STORAGE QUOTA: Sum the user's existing stored KB from the DB and compare against
  *      their tier's total storage cap (MediaTierLimits). Reject with MediaStorageQuotaException
  *      if the upload would exceed their quota.
@@ -119,10 +120,8 @@ public class MediaService {
             "video/mp4", "video/webm", "video/quicktime", "video/x-msvideo",
             "video/x-matroska", "video/x-ms-wmv", "video/3gpp");
 
-    /** Standard file size cap: 2MB for images/documents. */
+    /** Flat size cap for profile pictures only (not tier-based — avatars don't scale with plan). */
     private static final long MAX_SIZE = 2L * 1024 * 1024;
-    /** Extended size cap for video uploads: 50MB. */
-    private static final long MAX_VIDEO_SIZE = 50L * 1024 * 1024;
 
     /**
      * upload — validates, uploads to S3, generates a thumbnail if applicable, and persists the media record.
@@ -140,10 +139,11 @@ public class MediaService {
             throw new MediaPlanLimitException("Upload rate limit exceeded for your plan");
         }
         if (file.isEmpty()) throw new RuntimeException("Empty file");
-        boolean isVideo = VIDEOS.contains(file.getContentType());
-        long sizeLimit = isVideo ? MAX_VIDEO_SIZE : MAX_SIZE;
-        if (file.getSize() > sizeLimit)
-            throw new RuntimeException(isVideo ? "Video exceeds 50MB limit" : "File exceeds 2MB limit");
+        long maxFileSizeKb = MediaTierLimits.maxFileSizeKb(tier);
+        if (file.getSize() / 1024L > maxFileSizeKb) {
+            String capHuman = maxFileSizeKb >= 1024L ? (maxFileSizeKb / 1024L) + " MB" : maxFileSizeKb + " KB";
+            throw new RuntimeException("File exceeds your plan's " + capHuman + " per-file limit. Upgrade to Premium for larger uploads.");
+        }
 
         long capKb = MediaTierLimits.storageCapKb(tier);
         long usedKb = repo.sumSizeKbByUploaderId(uploaderId);

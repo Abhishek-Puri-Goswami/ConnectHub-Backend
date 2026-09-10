@@ -12,10 +12,10 @@ import java.time.Instant;
  * MessageTierRateLimiter — Per-User Per-Minute Message Rate Limiter
  *
  * PURPOSE:
- *   Enforces a cap on how many chat messages a user can send per minute based on
- *   their subscription tier. FREE users have a lower cap; PRO users get a higher one.
- *   This prevents spam and ensures fair resource usage across all users on shared
- *   infrastructure. The limits are defined in SubscriptionTierLimits.
+ *   Enforces a cap on how many chat messages a user can send per minute. This is a
+ *   uniform anti-abuse limit — the same for every subscription tier, not a billing
+ *   differentiator — to prevent spam without making normal conversation feel
+ *   rate-limited. The limit is defined in SubscriptionTierLimits.
  *
  * WHERE IT IS CALLED:
  *   MessageService.send() calls tryAcquire() before persisting any message. This
@@ -71,7 +71,8 @@ public class MessageTierRateLimiter {
      *   6. Otherwise return true — the request is allowed.
      *
      * @param userId           the user's ID as a string (Redis key component)
-     * @param subscriptionTier normalized tier string ("FREE" or "PRO")
+     * @param subscriptionTier accepted for call-site compatibility; the limit no longer
+     *                         varies by tier (see SubscriptionTierLimits)
      * @return true if the request is within the rate limit; false if the cap is exceeded
      */
     public boolean tryAcquire(String userId, String subscriptionTier) {

@@ -67,10 +67,12 @@ public class RoomService {
     private static final String ROOM_TYPE_GROUP = "GROUP";
 
     /*
-     * FREE plan cap on group rooms — aligned with billing tier feature matrix.
-     * PRO/BUSINESS users bypass this check via isPaidTier().
+     * FREE plan caps — aligned with billing tier feature matrix. Paid users
+     * (PREMIUM/PLATINUM) bypass these checks via isPaidTier().
      */
     private static final int FREE_PLAN_MAX_GROUP_ROOMS = 5;
+    private static final int FREE_PLAN_MAX_MEMBERS_PER_ROOM = 25;
+    private static final int PAID_PLAN_MAX_MEMBERS_PER_ROOM = 250;
 
     private final RoomRepository roomRepo;
     private final RoomMemberRepository memberRepo;
@@ -91,7 +93,9 @@ public class RoomService {
      *   6. Publish a "room.created" Kafka event for downstream services.
      *
      * The maxMembers for DMs is always fixed at 2. For groups, maxMembers is set to
-     * whichever is larger: the requested capacity or the actual group size + 1 (creator).
+     * whichever is larger: the requested capacity or the actual group size + 1 (creator),
+     * then capped at the tier's members-per-room limit (FREE_PLAN_MAX_MEMBERS_PER_ROOM
+     * or PAID_PLAN_MAX_MEMBERS_PER_ROOM).
      *
      * @param creatorId        the user creating the room (becomes ADMIN)
      * @param req              the creation request with type, name, memberIds, etc.
@@ -103,11 +107,20 @@ public class RoomService {
 
         validateCreateRoomRequest(roomType, req.getName(), memberIds, req.getMaxMembers());
 
-        if (ROOM_TYPE_GROUP.equals(roomType) && !isPaidTier(subscriptionTier)) {
-            long existing = roomRepo.countByCreatedByIdAndType(creatorId, ROOM_TYPE_GROUP);
-            if (existing >= FREE_PLAN_MAX_GROUP_ROOMS) {
-                throw new ForbiddenException("Free plan allows up to " + FREE_PLAN_MAX_GROUP_ROOMS
-                        + " group chats. Upgrade to Premium for more groups.");
+        boolean paid = isPaidTier(subscriptionTier);
+        int memberCap = paid ? PAID_PLAN_MAX_MEMBERS_PER_ROOM : FREE_PLAN_MAX_MEMBERS_PER_ROOM;
+
+        if (ROOM_TYPE_GROUP.equals(roomType)) {
+            if (!paid) {
+                long existing = roomRepo.countByCreatedByIdAndType(creatorId, ROOM_TYPE_GROUP);
+                if (existing >= FREE_PLAN_MAX_GROUP_ROOMS) {
+                    throw new ForbiddenException("Free plan allows up to " + FREE_PLAN_MAX_GROUP_ROOMS
+                            + " group chats. Upgrade to Premium for more groups.");
+                }
+            }
+            if (memberIds.size() + 1 > memberCap) {
+                throw new ForbiddenException("Your plan allows up to " + memberCap
+                        + " members per room. Upgrade to Premium for more.");
             }
         }
 
@@ -118,10 +131,14 @@ public class RoomService {
             }
         }
 
+        int resolvedMaxMembers = ROOM_TYPE_DM.equals(roomType)
+                ? 2
+                : Math.min(Math.max(req.getMaxMembers(), memberIds.size() + 1), memberCap);
+
         Room room = Room.builder().name(resolveRoomName(roomType, req.getName(), memberIds))
                 .description(req.getDescription()).type(roomType).createdById(creatorId)
                 .isPrivate(ROOM_TYPE_DM.equals(roomType) || req.isPrivate())
-                .maxMembers(ROOM_TYPE_DM.equals(roomType) ? 2 : Math.max(req.getMaxMembers(), memberIds.size() + 1))
+                .maxMembers(resolvedMaxMembers)
                 .build();
         room = roomRepo.save(room);
         addMember(room.getRoomId(), creatorId, "ADMIN");

@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -105,12 +106,41 @@ class MediaServiceTest {
 
     @Test
     void upload_fileTooLarge_throws() {
-        byte[] big = new byte[3 * 1024 * 1024]; // 3MB
+        // FREE tier per-file cap is 10MB (MediaTierLimits.FREE_MAX_FILE_SIZE_KB) — 11MB exceeds it
+        byte[] big = new byte[11 * 1024 * 1024];
         MockMultipartFile file = new MockMultipartFile("file", "big.txt", "text/plain", big);
         when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
 
         assertThrows(RuntimeException.class,
                 () -> mediaService.upload(file, 1, "room1", "FREE"));
+    }
+
+    @Test
+    void upload_freeTierFileUnderCap_ok() {
+        // 8MB is over the old flat 2MB constant but under the new 10MB FREE tier cap
+        byte[] eightMb = new byte[8 * 1024 * 1024];
+        MockMultipartFile file = new MockMultipartFile("file", "big.txt", "text/plain", eightMb);
+        when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
+        when(repo.sumSizeKbByUploaderId(1)).thenReturn(0L);
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenReturn(PutObjectResponse.builder().build());
+        when(repo.save(any())).thenReturn(MediaFile.builder().mediaId("free-ok").build());
+
+        assertDoesNotThrow(() -> mediaService.upload(file, 1, "room1", "FREE"));
+    }
+
+    @Test
+    void upload_premiumTierLargeFile_ok() {
+        // 20MB would fail on FREE (10MB cap) but is fine on PREMIUM (250MB cap)
+        byte[] twentyMb = new byte[20 * 1024 * 1024];
+        MockMultipartFile file = new MockMultipartFile("file", "big.txt", "text/plain", twentyMb);
+        when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
+        when(repo.sumSizeKbByUploaderId(1)).thenReturn(0L);
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenReturn(PutObjectResponse.builder().build());
+        when(repo.save(any())).thenReturn(MediaFile.builder().mediaId("premium-ok").build());
+
+        assertDoesNotThrow(() -> mediaService.upload(file, 1, "room1", "PREMIUM"));
     }
 
     @Test

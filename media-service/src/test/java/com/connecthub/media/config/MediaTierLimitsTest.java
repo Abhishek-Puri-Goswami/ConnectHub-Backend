@@ -65,4 +65,45 @@ class MediaTierLimitsTest {
     void uploadsPerMinute_null_returnsFreeLimits() {
         assertThat(MediaTierLimits.uploadsPerMinute(null)).isEqualTo(5);
     }
+
+    // ─── Regression coverage for the PRO/BUSINESS-only bug ───────────────────
+    // The JWT/gateway actually emits FREE/PREMIUM/PLATINUM (see auth-service's
+    // JwtUtil and AuthServiceImpl.resolvedTier), not PRO/BUSINESS. A paying
+    // PREMIUM/PLATINUM user was silently falling through to FREE limits because
+    // nothing above ever exercised these exact strings.
+
+    @Test
+    void storageCapKb_premium_returns10GB() {
+        assertThat(MediaTierLimits.storageCapKb("PREMIUM")).isEqualTo(10L * 1024L * 1024L);
+    }
+
+    @Test
+    void storageCapKb_platinum_returns10GB() {
+        assertThat(MediaTierLimits.storageCapKb("PLATINUM")).isEqualTo(10L * 1024L * 1024L);
+    }
+
+    @Test
+    void uploadsPerMinute_premium_returns30() {
+        assertThat(MediaTierLimits.uploadsPerMinute("PREMIUM")).isEqualTo(30);
+    }
+
+    @Test
+    void uploadsPerMinute_platinum_returns30() {
+        assertThat(MediaTierLimits.uploadsPerMinute("PLATINUM")).isEqualTo(30);
+    }
+
+    @Test
+    void maxFileSizeKb_free_returns10MB() {
+        assertThat(MediaTierLimits.maxFileSizeKb("FREE")).isEqualTo(10L * 1024L);
+    }
+
+    @Test
+    void maxFileSizeKb_premium_returns250MB() {
+        assertThat(MediaTierLimits.maxFileSizeKb("PREMIUM")).isEqualTo(250L * 1024L);
+    }
+
+    @Test
+    void maxFileSizeKb_platinum_returns250MB() {
+        assertThat(MediaTierLimits.maxFileSizeKb("PLATINUM")).isEqualTo(250L * 1024L);
+    }
 }

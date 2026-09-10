@@ -134,6 +134,81 @@ class RoomServiceTest {
         assertEquals("GROUP", result.getType());
     }
 
+    // ── members-per-room tier cap ───────────────────────────────────────────
+    // Regression coverage: maxMembers used to be entirely requester-chosen with
+    // no tier enforcement at all (any user could request up to 500 members on
+    // the FREE plan). These prove the new cap is actually applied.
+
+    @Test
+    void createGroup_freeTierOverMemberCap_throws() {
+        CreateRoomRequest req = new CreateRoomRequest();
+        req.setName("Too Big");
+        req.setType("GROUP");
+        // 25 other members + creator = 26 total, one over the FREE cap of 25
+        req.setMemberIds(new ArrayList<>(java.util.stream.IntStream.rangeClosed(2, 26).boxed().toList()));
+        when(roomRepo.countByCreatedByIdAndType(1, "GROUP")).thenReturn(0L);
+
+        assertThrows(ForbiddenException.class, () -> svc.createRoom(1, req, "FREE"));
+    }
+
+    @Test
+    void createGroup_freeTierAtMemberCap_ok() {
+        CreateRoomRequest req = new CreateRoomRequest();
+        req.setName("Exactly At Cap");
+        req.setType("GROUP");
+        // 24 other members + creator = 25 total, exactly at the FREE cap
+        req.setMemberIds(new ArrayList<>(java.util.stream.IntStream.rangeClosed(2, 25).boxed().toList()));
+        Room saved = Room.builder().roomId("r6").name("Exactly At Cap").type("GROUP").createdById(1).maxMembers(25).build();
+        when(roomRepo.countByCreatedByIdAndType(1, "GROUP")).thenReturn(0L);
+        when(roomRepo.save(any())).thenReturn(saved);
+        when(memberRepo.existsByRoomIdAndUserId(any(), anyInt())).thenReturn(false);
+        when(memberRepo.countByRoomId(any())).thenReturn(0);
+        when(roomRepo.findByRoomId("r6")).thenReturn(Optional.of(saved));
+        when(memberRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        Room result = svc.createRoom(1, req, "FREE");
+        assertEquals("GROUP", result.getType());
+    }
+
+    @Test
+    void createGroup_freeTierRequestedMaxMembers_isCappedAt25() {
+        CreateRoomRequest req = new CreateRoomRequest();
+        req.setName("Requests 500"); req.setType("GROUP"); req.setMemberIds(List.of(2));
+        req.setMaxMembers(500); // requester asks for the field default — FREE tier must cap it
+        Room saved = Room.builder().roomId("r7").name("Requests 500").type("GROUP").createdById(1).maxMembers(25).build();
+        when(roomRepo.countByCreatedByIdAndType(1, "GROUP")).thenReturn(0L);
+        when(roomRepo.save(any())).thenReturn(saved);
+        when(memberRepo.existsByRoomIdAndUserId(any(), anyInt())).thenReturn(false);
+        when(memberRepo.countByRoomId(any())).thenReturn(0);
+        when(roomRepo.findByRoomId("r7")).thenReturn(Optional.of(saved));
+        when(memberRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        svc.createRoom(1, req, "FREE");
+
+        org.mockito.ArgumentCaptor<Room> captor = org.mockito.ArgumentCaptor.forClass(Room.class);
+        verify(roomRepo).save(captor.capture());
+        assertEquals(25, captor.getValue().getMaxMembers());
+    }
+
+    @Test
+    void createGroup_premiumTierRequestedMaxMembers_isCappedAt250() {
+        CreateRoomRequest req = new CreateRoomRequest();
+        req.setName("Requests 500"); req.setType("GROUP"); req.setMemberIds(List.of(2));
+        req.setMaxMembers(500); // PREMIUM cap is 250 — must still be capped, just higher
+        Room saved = Room.builder().roomId("r8").name("Requests 500").type("GROUP").createdById(1).maxMembers(250).build();
+        when(roomRepo.save(any())).thenReturn(saved);
+        when(memberRepo.existsByRoomIdAndUserId(any(), anyInt())).thenReturn(false);
+        when(memberRepo.countByRoomId(any())).thenReturn(0);
+        when(roomRepo.findByRoomId("r8")).thenReturn(Optional.of(saved));
+        when(memberRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        svc.createRoom(1, req, "PREMIUM");
+
+        org.mockito.ArgumentCaptor<Room> captor = org.mockito.ArgumentCaptor.forClass(Room.class);
+        verify(roomRepo).save(captor.capture());
+        assertEquals(250, captor.getValue().getMaxMembers());
+    }
+
     @Test
     void createDM_wrongMemberCount_throws() {
         CreateRoomRequest req = new CreateRoomRequest();
