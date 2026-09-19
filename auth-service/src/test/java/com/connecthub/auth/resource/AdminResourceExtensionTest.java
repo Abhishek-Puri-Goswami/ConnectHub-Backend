@@ -116,7 +116,7 @@ class AdminResourceExtensionTest {
         User target = User.builder().userId(2).role("ADMIN").username("mgr").build();
         when(authService.getUserById(2)).thenReturn(target);
 
-        ResponseEntity<User> resp = adminResource.suspend(2, 1, "ADMIN",
+        ResponseEntity<com.connecthub.auth.dto.AdminUserDto> resp = adminResource.suspend(2, 1, "ADMIN",
                 mock(HttpServletRequest.class));
 
         assertEquals(HttpStatus.FORBIDDEN, resp.getStatusCode());
@@ -126,7 +126,7 @@ class AdminResourceExtensionTest {
     void checkPrivilege_getUserByIdThrows_returnsNotFound() {
         when(authService.getUserById(99)).thenThrow(new RuntimeException("not found"));
 
-        ResponseEntity<User> resp = adminResource.suspend(99, 1, "PLATFORM_ADMIN",
+        ResponseEntity<com.connecthub.auth.dto.AdminUserDto> resp = adminResource.suspend(99, 1, "PLATFORM_ADMIN",
                 mock(HttpServletRequest.class));
 
         assertEquals(HttpStatus.NOT_FOUND, resp.getStatusCode());

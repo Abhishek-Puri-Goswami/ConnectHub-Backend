@@ -68,6 +68,8 @@ public class AuthServiceImpl implements AuthService {
 
     // Redis key prefix for blacklisted tokens — value is "1", TTL = token lifetime
     private static final String TOKEN_BLACKLIST = "token:blacklist:";
+    /** The only roles the system knows; anything else would be stored, shown in audit logs and mean nothing. */
+    static final java.util.Set<String> ASSIGNABLE_ROLES = java.util.Set.of("USER", "ADMIN", "PLATFORM_ADMIN");
 
     // =========================================================================
     // REGISTRATION
@@ -581,8 +583,10 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public User changeRole(int userId, String role) {
+        if (role == null || !ASSIGNABLE_ROLES.contains(role.trim().toUpperCase()))
+            throw new BadRequestException("Role must be one of " + ASSIGNABLE_ROLES);
         User u = getUserById(userId);
-        String normalized = role.toUpperCase();
+        String normalized = role.trim().toUpperCase();
         u.setRole(normalized);
         if ("PLATFORM_ADMIN".equals(normalized)) {
             u.setSubscriptionTier("PLATINUM");

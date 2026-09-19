@@ -236,7 +236,16 @@ scratch e2e scripts into a committed regression suite).
   role header, the rest needs `X-User-Id`; (6) Eureka requires basic auth. Services refuse to start without the
   secret. Live-verified. NOT covered: MySQL (native, all interfaces — bind it to localhost in my.ini yourself),
   Zipkin :9411 (all interfaces, traces only), Swagger/API-docs are still public.
-- **Phase 3 remaining**: #10, #15, #16. **Phase 4**: #11 (billing UI still advertises
+- **#10 sensitive data / roles — DONE**: the four admin endpoints (`/admin/users`, suspend, reactivate, role) returned the raw
+  `User` entity, i.e. `passwordHash` (and OAuth `providerId`). They now return `AdminUserDto` (explicit allow-list), and
+  the entity also has `@JsonIgnore` on both fields as a second barrier. `changeRole` only accepts `USER` / `ADMIN` /
+  `PLATFORM_ADMIN` (any string used to be stored and shown in the audit log; a missing value was a 500), refuses
+  changing your own role, and invalidates the target's tokens so a demotion applies immediately instead of after the
+  24h token expiry. **Open product question, deliberately not changed**: `GET /profile/{id}`, `/search` and
+  `/users/batch` show any signed-in user another user's email and phone number (the DM info panel displays them).
+  Also note plain `ADMIN` can change another user's profile/password endpoints (`updateProfile`/`changePassword`
+  accept ADMIN as well as self) — decide whether that should be PLATFORM_ADMIN only.
+- **Phase 3 remaining**: #15, #16. **Phase 4**: #11 (billing UI still advertises
   the old limits), #12, #14. **Phase 5**: P2 hygiene #17–#22.
 
 ## Not yet done

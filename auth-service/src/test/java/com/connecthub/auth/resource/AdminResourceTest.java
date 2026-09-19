@@ -25,7 +25,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -57,7 +59,7 @@ class AdminResourceTest {
         HttpServletRequest req = mock(HttpServletRequest.class);
         when(req.getRemoteAddr()).thenReturn("127.0.0.1");
 
-        ResponseEntity<User> res = adminResource.suspend(targetId, 100, "ADMIN", req);
+        ResponseEntity<com.connecthub.auth.dto.AdminUserDto> res = adminResource.suspend(targetId, 100, "ADMIN", req);
 
         assertEquals(HttpStatus.OK, res.getStatusCode());
         verify(redis).convertAndSend(anyString(), anyString());
@@ -70,7 +72,7 @@ class AdminResourceTest {
         User target = User.builder().userId(targetId).role("PLATFORM_ADMIN").build();
         when(authService.getUserById(targetId)).thenReturn(target);
 
-        ResponseEntity<User> res = adminResource.suspend(targetId, 100, "ADMIN", mock(HttpServletRequest.class));
+        ResponseEntity<com.connecthub.auth.dto.AdminUserDto> res = adminResource.suspend(targetId, 100, "ADMIN", mock(HttpServletRequest.class));
 
         assertEquals(HttpStatus.FORBIDDEN, res.getStatusCode());
     }
@@ -85,7 +87,7 @@ class AdminResourceTest {
         HttpServletRequest req = mock(HttpServletRequest.class);
         when(req.getRemoteAddr()).thenReturn("127.0.0.1");
 
-        ResponseEntity<User> res = adminResource.reactivate(targetId, 100, "ADMIN", req);
+        ResponseEntity<com.connecthub.auth.dto.AdminUserDto> res = adminResource.reactivate(targetId, 100, "ADMIN", req);
 
         assertEquals(HttpStatus.OK, res.getStatusCode());
         verify(redis, times(2)).delete(anyString());
@@ -107,14 +109,53 @@ class AdminResourceTest {
     }
 
     @Test
-    void changeRole_onlyPlatformAdmin() {
-        ResponseEntity<User> res = adminResource.changeRole(1, Map.of("role", "ADMIN"), 100, "ADMIN", mock(HttpServletRequest.class));
+    @SuppressWarnings("unchecked")
+    void changeRole_onlyPlatformAdmin_andForcesRelogin() {
+        ResponseEntity<com.connecthub.auth.dto.AdminUserDto> res =
+                adminResource.changeRole(1, Map.of("role", "ADMIN"), 100, "ADMIN", mock(HttpServletRequest.class));
         assertEquals(HttpStatus.FORBIDDEN, res.getStatusCode());
 
-        User u = new User();
+        User u = User.builder().userId(1).username("u1").role("ADMIN").passwordHash("$2a$secret").build();
         when(authService.changeRole(1, "ADMIN")).thenReturn(u);
-        res = adminResource.changeRole(1, Map.of("role", "ADMIN"), 100, "PLATFORM_ADMIN", mock(HttpServletRequest.class));
+        org.springframework.data.redis.core.ValueOperations<String, String> ops = mock(org.springframework.data.redis.core.ValueOperations.class);
+        when(redis.opsForValue()).thenReturn(ops);
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        when(req.getRemoteAddr()).thenReturn("127.0.0.1");
+
+        res = adminResource.changeRole(1, Map.of("role", "ADMIN"), 100, "PLATFORM_ADMIN", req);
+
         assertEquals(HttpStatus.OK, res.getStatusCode());
+        assertEquals("ADMIN", res.getBody().getRole());
+        // old tokens still carry the previous role: they must be invalidated
+        verify(ops).set(eq("user:invalidated:1"), anyString(), eq(7L), eq(java.util.concurrent.TimeUnit.DAYS));
+    }
+
+    @Test
+    void changeRole_cannotChangeOwnRole() {
+        assertThrows(com.connecthub.auth.exception.BadRequestException.class,
+                () -> adminResource.changeRole(100, Map.of("role", "USER"), 100, "PLATFORM_ADMIN", mock(HttpServletRequest.class)));
+        verify(authService, never()).changeRole(anyInt(), any());
+    }
+
+    @Test
+    void adminResponses_neverContainPasswordHashOrProviderId() throws Exception {
+        User u = User.builder().userId(1).username("u1").email("u1@example.com").role("USER")
+                .passwordHash("$2a$12$SECRETHASH").providerId("google-123").build();
+        when(authService.getAllUsers()).thenReturn(List.of(u));
+
+        var body = adminResource.getAllUsers().getBody();
+        String json = new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()).writeValueAsString(body);
+
+        assertFalse(json.contains("SECRETHASH"), json);
+        assertFalse(json.toLowerCase().contains("passwordhash"), json);
+        assertFalse(json.contains("google-123"), json);
+        assertTrue(json.contains("u1@example.com"));
+        // defence in depth: even serializing the raw entity must not leak the hash
+        String raw = new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()).writeValueAsString(u);
+        assertFalse(raw.contains("SECRETHASH"), raw);
+        assertFalse(raw.contains("google-123"), raw);
     }
 
     @Test

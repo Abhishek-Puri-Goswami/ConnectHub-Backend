@@ -24,6 +24,8 @@ public class User {
     @Column(unique = true, nullable = false, length = 100)
     private String email;
 
+    // never serialized: even if an endpoint returns the entity by mistake the hash cannot leak
+    @com.fasterxml.jackson.annotation.JsonIgnore
     @Column(length = 255)
     private String passwordHash;
 
@@ -47,6 +49,7 @@ public class User {
     @Builder.Default
     private String provider = "LOCAL";
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String providerId;
 
     @Column(nullable = false)

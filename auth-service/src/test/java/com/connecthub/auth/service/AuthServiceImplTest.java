@@ -712,4 +712,26 @@ class AuthServiceImplTest {
         when(userRepository.findByUserIdIn(any())).thenReturn(java.util.List.of(testUser));
         assertFalse(authService.getUsersByIds(java.util.List.of(1)).isEmpty());
     }
+
+    // ── changeRole ───────────────────────────────────────────────────────────
+
+    @Test
+    void changeRole_rejectsUnknownOrMissingRoles() {
+        for (String bad : new String[]{"SUPERUSER", "", "  ", "root", "PLATINUM"}) {
+            assertThrows(BadRequestException.class, () -> authService.changeRole(1, bad), bad);
+        }
+        assertThrows(BadRequestException.class, () -> authService.changeRole(1, null));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void changeRole_acceptsKnownRoles_caseInsensitive_andAlignsTier() {
+        when(userRepository.findById(1)).thenReturn(Optional.of(testUser));
+        when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        User promoted = authService.changeRole(1, " platform_admin ");
+
+        assertEquals("PLATFORM_ADMIN", promoted.getRole());
+        assertEquals("PLATINUM", promoted.getSubscriptionTier());
+    }
 }

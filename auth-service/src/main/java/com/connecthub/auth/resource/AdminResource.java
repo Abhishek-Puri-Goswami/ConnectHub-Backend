@@ -4,7 +4,9 @@ import com.connecthub.auth.dto.AnnouncementDto;
 import com.connecthub.auth.entity.Announcement;
 import com.connecthub.auth.entity.AnalyticsSnapshot;
 import com.connecthub.auth.entity.AuditLog;
+import com.connecthub.auth.dto.AdminUserDto;
 import com.connecthub.auth.entity.User;
+import com.connecthub.auth.exception.BadRequestException;
 import com.connecthub.auth.repository.AnnouncementRepository;
 import com.connecthub.auth.service.AnalyticsService;
 import com.connecthub.auth.service.AuditService;
@@ -56,7 +58,7 @@ public class AdminResource {
     }
 
     @PutMapping("/admin/users/{userId}/suspend")
-    public ResponseEntity<User> suspend(@PathVariable int userId,
+    public ResponseEntity<AdminUserDto> suspend(@PathVariable int userId,
             @RequestHeader("X-User-Id") int adminId,
             @RequestHeader(value = "X-User-Role", defaultValue = "") String requesterRole,
             HttpServletRequest req) {
@@ -67,11 +69,11 @@ public class AdminResource {
         redis.opsForValue().set("user:invalidated:" + userId, String.valueOf(System.currentTimeMillis()), 30, TimeUnit.DAYS);
         redis.convertAndSend(SUSPENDED_CHANNEL, String.valueOf(userId));
         auditService.log(adminId, "USER_SUSPEND", "USER", String.valueOf(userId), "Suspended: " + u.getUsername(), req.getRemoteAddr());
-        return ResponseEntity.ok(u);
+        return ResponseEntity.ok(AdminUserDto.from(u));
     }
 
     @PutMapping("/admin/users/{userId}/reactivate")
-    public ResponseEntity<User> reactivate(@PathVariable int userId,
+    public ResponseEntity<AdminUserDto> reactivate(@PathVariable int userId,
             @RequestHeader("X-User-Id") int adminId,
             @RequestHeader(value = "X-User-Role", defaultValue = "") String requesterRole,
             HttpServletRequest req) {
@@ -81,7 +83,7 @@ public class AdminResource {
         redis.delete("user:suspended:" + userId);
         redis.delete("user:invalidated:" + userId);
         auditService.log(adminId, "USER_REACTIVATE", "USER", String.valueOf(userId), "Reactivated: " + u.getUsername(), req.getRemoteAddr());
-        return ResponseEntity.ok(u);
+        return ResponseEntity.ok(AdminUserDto.from(u));
     }
 
     @DeleteMapping("/admin/users/{userId}")
@@ -98,7 +100,7 @@ public class AdminResource {
     }
 
     @PutMapping("/admin/users/{userId}/role")
-    public ResponseEntity<User> changeRole(@PathVariable int userId, @RequestBody java.util.Map<String, String> body,
+    public ResponseEntity<AdminUserDto> changeRole(@PathVariable int userId, @RequestBody java.util.Map<String, String> body,
             @RequestHeader("X-User-Id") int adminId,
             @RequestHeader(value = "X-User-Role", defaultValue = "") String requesterRole,
             HttpServletRequest req) {
@@ -106,9 +108,17 @@ public class AdminResource {
             return ResponseEntity.status(403).build();
         }
         String role = body.get("role");
-        User u = authService.changeRole(userId, role);
-        auditService.log(adminId, "USER_ROLE_CHANGE", "USER", String.valueOf(userId), "Role changed to " + role + " for: " + u.getUsername(), req.getRemoteAddr());
-        return ResponseEntity.ok(u);
+        if (userId == adminId) {
+            // changing your own role could leave the platform without an admin
+            throw new BadRequestException("You cannot change your own role");
+        }
+        User u = authService.changeRole(userId, role); // validates the role value
+        // Tokens carry the role claim: force the affected user to sign in again so a demotion takes effect now
+        // (not when their 24h access token expires) and a promotion is picked up.
+        redis.opsForValue().set("user:invalidated:" + userId, String.valueOf(System.currentTimeMillis()),
+                7, TimeUnit.DAYS);
+        auditService.log(adminId, "USER_ROLE_CHANGE", "USER", String.valueOf(userId), "Role changed to " + u.getRole() + " for: " + u.getUsername(), req.getRemoteAddr());
+        return ResponseEntity.ok(AdminUserDto.from(u));
     }
 
     @GetMapping("/admin/audit")
@@ -117,8 +127,8 @@ public class AdminResource {
     }
 
     @GetMapping("/admin/users")
-    public ResponseEntity<java.util.List<User>> getAllUsers() {
-        return ResponseEntity.ok(authService.getAllUsers());
+    public ResponseEntity<java.util.List<AdminUserDto>> getAllUsers() {
+        return ResponseEntity.ok(authService.getAllUsers().stream().map(AdminUserDto::from).toList());
     }
 
     /** Returns the last 96 analytics snapshots (24h at 15-min intervals) for the admin dashboard charts. */
