@@ -100,7 +100,7 @@ class MediaServiceTest {
         MockMultipartFile file = new MockMultipartFile("file", "empty.txt", "text/plain", new byte[0]);
         when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
 
-        assertThrows(RuntimeException.class,
+        assertThrows(com.connecthub.media.exception.BadRequestException.class,
                 () -> mediaService.upload(file, 1, "room1", "FREE"));
     }
 
@@ -111,7 +111,7 @@ class MediaServiceTest {
         MockMultipartFile file = new MockMultipartFile("file", "big.txt", "text/plain", big);
         when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
 
-        assertThrows(RuntimeException.class,
+        assertThrows(com.connecthub.media.exception.FileSizeLimitException.class,
                 () -> mediaService.upload(file, 1, "room1", "FREE"));
     }
 

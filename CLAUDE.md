@@ -192,8 +192,12 @@ scratch e2e scripts into a committed regression suite).
     fail closed, so for the first ~minute after boot (before room-service is reachable from
     websocket/message-service) chat can be rejected.
 - **Phase 1 remaining**: refresh-token revocation on logout (see #4 note).
-- **Phase 2**: #8 media size cap (multipart 2MB defeats the 10MB/250MB tiers;
-  return 413), **#7 media storage = local disk** (decision: not Cloudinary/S3,
+- **#8 upload size limits — DONE**: media-service's multipart cap was 2MB, which defeated the
+  10MB/250MB tier limits. The multipart ceiling is now 260MB and `UploadSizeGuardFilter` returns 413
+  from the declared Content-Length per plan (FREE 10MB, paid 250MB, avatars 2MB) *before* the body is
+  spooled, so a FREE user can't push 250MB through. Oversize/quota errors are 413, empty file / bad
+  type are 400 (were 500). Live-verified; PRO-size uploads are unit-tested only (need storage, see #7).
+- **Phase 2 remaining**: **#7 media storage = local disk** (decision: not Cloudinary/S3,
   consistent with the local-only direction): a `StorageProvider` abstraction with a
   `LocalDisk` implementation; files served through authenticated or short-lived
   signed URLs since `<img>` can't send an Authorization header; #13.

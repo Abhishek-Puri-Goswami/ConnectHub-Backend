@@ -2,6 +2,8 @@ package com.connecthub.media.service;
 
 import com.connecthub.media.config.MediaTierLimits;
 import com.connecthub.media.entity.MediaFile;
+import com.connecthub.media.exception.BadRequestException;
+import com.connecthub.media.exception.FileSizeLimitException;
 import com.connecthub.media.exception.MediaPlanLimitException;
 import com.connecthub.media.exception.MediaStorageQuotaException;
 import com.connecthub.media.repository.MediaRepository;
@@ -138,11 +140,11 @@ public class MediaService {
         if (!uploadRateLimiter.tryAcquire(String.valueOf(uploaderId), tier)) {
             throw new MediaPlanLimitException("Upload rate limit exceeded for your plan");
         }
-        if (file.isEmpty()) throw new RuntimeException("Empty file");
+        if (file.isEmpty()) throw new BadRequestException("Empty file");
         long maxFileSizeKb = MediaTierLimits.maxFileSizeKb(tier);
         if (file.getSize() / 1024L > maxFileSizeKb) {
             String capHuman = maxFileSizeKb >= 1024L ? (maxFileSizeKb / 1024L) + " MB" : maxFileSizeKb + " KB";
-            throw new RuntimeException("File exceeds your plan's " + capHuman + " per-file limit. Upgrade to Premium for larger uploads.");
+            throw new FileSizeLimitException("File exceeds your plan's " + capHuman + " per-file limit. Upgrade to Premium for larger uploads.");
         }
 
         long capKb = MediaTierLimits.storageCapKb(tier);
@@ -157,7 +159,7 @@ public class MediaService {
         }
         String contentType = file.getContentType();
         if (contentType == null || !ALLOWED.contains(contentType))
-            throw new RuntimeException("File type not allowed: " + contentType);
+            throw new BadRequestException("File type not allowed: " + contentType);
 
         /*
          * Sanitize the filename by replacing all non-safe characters with underscores.
@@ -244,11 +246,11 @@ public class MediaService {
      * user-level asset. Only image types are accepted (jpeg, png, gif, webp).
      */
     public MediaFile uploadProfilePicture(MultipartFile file, int uploaderId) throws IOException {
-        if (file.isEmpty()) throw new RuntimeException("Empty file");
-        if (file.getSize() > MAX_SIZE) throw new RuntimeException("File exceeds 2MB limit");
+        if (file.isEmpty()) throw new BadRequestException("Empty file");
+        if (file.getSize() > MAX_SIZE) throw new FileSizeLimitException("Profile pictures are limited to 2 MB");
         String contentType = file.getContentType();
         if (contentType == null || !IMAGES.contains(contentType))
-            throw new RuntimeException("Only image files are allowed for profile pictures");
+            throw new BadRequestException("Only image files are allowed for profile pictures");
 
         String originalName = file.getOriginalFilename() != null
                 ? file.getOriginalFilename().replaceAll("[^a-zA-Z0-9._-]", "_") : "avatar";

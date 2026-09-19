@@ -22,8 +22,8 @@ spring:
     baseline-on-migrate: true
   servlet:
     multipart:
-      max-file-size: 2MB
-      max-request-size: 2MB
+      max-file-size: 260MB   # ceiling above the largest plan (PRO 250MB); per-plan limits are enforced by UploadSizeGuardFilter + MediaService
+      max-request-size: 262MB
   data:
     redis:
       host: ${REDIS_HOST:localhost}
