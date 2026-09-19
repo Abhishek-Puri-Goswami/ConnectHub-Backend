@@ -3,6 +3,8 @@ import com.connecthub.message.config.SubscriptionTierLimits;
 import com.connecthub.message.dto.MessagePreviewDto;
 import com.connecthub.message.entity.*;
 import com.connecthub.message.exception.BadRequestException;
+import com.connecthub.message.exception.ConflictException;
+import com.connecthub.message.exception.ForbiddenException;
 import com.connecthub.message.exception.ResourceNotFoundException;
 import com.connecthub.message.exception.TooManyRequestsException;
 import com.connecthub.message.repository.*;
@@ -209,8 +211,8 @@ public class MessageService {
      *   "(edited)" label next to the message bubble.
      */
     public Message edit(String msgId, String content, int editorId) {
-        Message m = msgRepo.findById(msgId).orElseThrow(() -> new RuntimeException("Message not found"));
-        if (!m.getSenderId().equals(editorId)) throw new RuntimeException("Not authorized");
+        Message m = msgRepo.findById(msgId).orElseThrow(() -> new ResourceNotFoundException("Message not found"));
+        if (!m.getSenderId().equals(editorId)) throw new ForbiddenException("Only the author can edit this message");
         m.setContent(HtmlUtils.htmlEscape(content));
         m.setEdited(true); m.setEditedAt(LocalDateTime.now());
         return msgRepo.save(m);
@@ -227,8 +229,8 @@ public class MessageService {
      *   Only the original sender is allowed to delete their own message.
      */
     public void delete(String msgId, int deleterId) {
-        Message m = msgRepo.findById(msgId).orElseThrow(() -> new RuntimeException("Message not found"));
-        if (!m.getSenderId().equals(deleterId)) throw new RuntimeException("Not authorized to delete this message");
+        Message m = msgRepo.findById(msgId).orElseThrow(() -> new ResourceNotFoundException("Message not found"));
+        if (!m.getSenderId().equals(deleterId)) throw new ForbiddenException("Only the author can delete this message");
         m.setDeleted(true); msgRepo.save(m);
     }
 
@@ -284,7 +286,7 @@ public class MessageService {
      * reaction is stored as a separate MessageReaction row.
      */
     public MessageReaction addReaction(String msgId, int uid, String emoji) {
-        if (reactRepo.existsByMessageIdAndUserIdAndEmoji(msgId, uid, emoji)) throw new RuntimeException("Already reacted");
+        if (reactRepo.existsByMessageIdAndUserIdAndEmoji(msgId, uid, emoji)) throw new ConflictException("Already reacted");
         return reactRepo.save(MessageReaction.builder().messageId(msgId).userId(uid).emoji(emoji).build());
     }
 

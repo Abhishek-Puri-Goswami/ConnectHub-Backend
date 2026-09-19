@@ -211,7 +211,17 @@ scratch e2e scripts into a committed regression suite).
   does its own check). Cookie relies on localhost being same-site across ports — revisit if ever hosted.
   Also fixed: thumbnails were labelled JPEG but written in the source format. Old S3-era media rows have
   dead URLs (their bytes never existed locally). Live-verified (upload, serve, 401/403 cases, Range, reset).
-- **Phase 2 remaining**: #13.
+- **#13 HTTP status handling — DONE**: client mistakes (missing header/param/part, malformed JSON, wrong type,
+  unknown path, wrong method, wrong media type) used to fall into catch-all handlers and return 500 (or 400 for
+  any RuntimeException in message-service). New `common-lib` `CommonWebExceptionHandler` (built on Spring's
+  `ResponseEntityExceptionHandler`) maps them to 400/404/405/406/413/415 (missing `X-User-Id` = 401) with one body
+  `{success,status,error,message}`; every service advice (auth, room, message, media, presence, notification,
+  payment, new one in websocket) extends it — do NOT re-declare handlers for MethodArgumentNotValid /
+  NoResourceFound / MaxUploadSizeExceeded in a service (ambiguous mapping). Unexpected errors are now a generic
+  500 that never echoes exception text (media used to leak SDK messages). Domain fixes: message edit/delete by
+  a non-author = 403, unknown message = 404, duplicate reaction = 409 (`ConflictException`), account-delete
+  wrong password = 403 / missing = 400. Empty-body login stays 401 on purpose. Live-verified (44 cases).
+- **Phase 2 done.**
 - **Phase 3**: #9, #10, #15, #16. **Phase 4**: #11 (billing UI still advertises
   the old limits), #12, #14. **Phase 5**: P2 hygiene #17–#22.
 

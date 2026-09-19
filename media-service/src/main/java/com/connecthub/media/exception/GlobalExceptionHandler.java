@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends com.connecthub.common.web.CommonWebExceptionHandler {
 
     @ExceptionHandler(MediaPlanLimitException.class)
     public ResponseEntity<Map<String, Object>> handlePlanLimit(MediaPlanLimitException ex) {
@@ -33,45 +33,21 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getMessage(), "status", 413));
     }
 
-    /** Body larger than the server-wide multipart ceiling. */
-    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
-    public ResponseEntity<Map<String, Object>> handleTooBig(org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
-        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                .body(Map.of("error", "File is too large", "status", 413));
-    }
-
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<Map<String, Object>> handleBadRequest(BadRequestException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Map.of("error", ex.getMessage(), "status", 400));
     }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex) {
-        String errors = ex.getBindingResult().getFieldErrors().stream()
-                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
-                .collect(Collectors.joining(", "));
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("error", errors, "status", 400));
-    }
-
-    @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<Map<String, Object>> handleNotFound(NoResourceFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("error", "Resource not found: " + ex.getResourcePath(), "status", 404));
-    }
-
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntime(RuntimeException ex) {
         log.error("Unhandled runtime exception: ", ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", ex.getMessage() != null ? ex.getMessage() : "Internal server error", "status", 500));
+        return com.connecthub.common.web.CommonWebExceptionHandler.internalError();
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleAll(Exception ex) {
         log.error("Unhandled exception: ", ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", ex.getMessage() != null ? ex.getMessage() : "Internal server error", "status", 500));
+        return com.connecthub.common.web.CommonWebExceptionHandler.internalError();
     }
 }

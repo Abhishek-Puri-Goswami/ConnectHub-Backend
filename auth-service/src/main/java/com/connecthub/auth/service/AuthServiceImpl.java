@@ -613,10 +613,10 @@ public class AuthServiceImpl implements AuthService {
         User user = getUserById(userId);
         if ("LOCAL".equals(user.getProvider())) {
             if (password == null || password.isBlank()) {
-                throw new RuntimeException("Password confirmation is required to delete your account");
+                throw new BadRequestException("Password confirmation is required to delete your account");
             }
             if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-                throw new RuntimeException("Incorrect password");
+                throw new ForbiddenException("Incorrect password");
             }
         }
         // Invalidate existing tokens so they are rejected immediately after deletion

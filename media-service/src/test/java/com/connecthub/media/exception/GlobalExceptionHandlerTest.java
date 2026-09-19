@@ -62,6 +62,7 @@ class GlobalExceptionHandlerTest {
         var resp = handler.handleRuntime(ex);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-        assertThat(resp.getBody()).containsEntry("error", "Unexpected internal failure");
+        // internal exception text (e.g. storage or SDK errors) must never reach the client
+        assertThat(resp.getBody()).containsEntry("error", "Internal server error");
     }
 }

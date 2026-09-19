@@ -9,7 +9,8 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+@lombok.extern.slf4j.Slf4j
+public class GlobalExceptionHandler extends com.connecthub.common.web.CommonWebExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNotFound(ResourceNotFoundException ex) {
@@ -39,21 +40,15 @@ public class GlobalExceptionHandler {
                 .body(body);
     }
 
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<Map<String, Object>> handleRuntime(RuntimeException ex) {
-        return error(HttpStatus.BAD_REQUEST, ex.getMessage());
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleConflict(ConflictException ex) {
+        return error(HttpStatus.CONFLICT, ex.getMessage());
     }
 
+    /** Anything unexpected is a server error (and is logged), never a 400 with an internal message. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneral(Exception ex) {
-        return error(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
-    }
-
-    private ResponseEntity<Map<String, Object>> error(HttpStatus status, String message) {
-        return ResponseEntity.status(status).body(Map.of(
-            "error", message,
-            "status", status.value(),
-            "timestamp", LocalDateTime.now().toString()
-        ));
+        log.error("Unhandled exception in message-service", ex);
+        return internalError();
     }
 }
