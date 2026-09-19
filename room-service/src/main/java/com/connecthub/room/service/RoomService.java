@@ -71,6 +71,7 @@ public class RoomService {
      * (PREMIUM/PLATINUM) bypass these checks via isPaidTier().
      */
     private static final int FREE_PLAN_MAX_GROUP_ROOMS = 5;
+    private static final int PAID_PLAN_MAX_GROUP_ROOMS = 500;
     private static final int FREE_PLAN_MAX_MEMBERS_PER_ROOM = 25;
     private static final int PAID_PLAN_MAX_MEMBERS_PER_ROOM = 250;
 
@@ -113,16 +114,16 @@ public class RoomService {
         int memberCap = paid ? PAID_PLAN_MAX_MEMBERS_PER_ROOM : FREE_PLAN_MAX_MEMBERS_PER_ROOM;
 
         if (ROOM_TYPE_GROUP.equals(roomType)) {
-            if (!paid) {
-                long existing = roomRepo.countByCreatedByIdAndType(creatorId, ROOM_TYPE_GROUP);
-                if (existing >= FREE_PLAN_MAX_GROUP_ROOMS) {
-                    throw new ForbiddenException("Free plan allows up to " + FREE_PLAN_MAX_GROUP_ROOMS
-                            + " group chats. Upgrade to Premium for more groups.");
-                }
+            long existing = roomRepo.countByCreatedByIdAndType(creatorId, ROOM_TYPE_GROUP);
+            int groupCap = paid ? PAID_PLAN_MAX_GROUP_ROOMS : FREE_PLAN_MAX_GROUP_ROOMS;
+            if (existing >= groupCap) {
+                throw new ForbiddenException(paid
+                        ? "Your plan allows up to " + groupCap + " group chats."
+                        : "Free plan allows up to " + groupCap + " group chats. Upgrade to Pro for more groups.");
             }
             if (memberIds.size() + 1 > memberCap) {
                 throw new ForbiddenException("Your plan allows up to " + memberCap
-                        + " members per room. Upgrade to Premium for more.");
+                        + " members per room. Upgrade to Pro for more.");
             }
         }
 

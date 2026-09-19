@@ -262,6 +262,14 @@ scratch e2e scripts into a committed regression suite).
   with the caller id forwarded) and answers 400 naming every unknown id before anything is saved; if auth-service cannot
   answer the request fails closed with 503. Self-join by invite code is unaffected. Live-verified (14 checks).
 - **Phase 3 done.** **Phase 4**: #11 (billing UI still advertises
+- **#11 billing UI vs backend — DONE**: the billing page and upgrade modal advertised Premium/Platinum limits that were never
+  enforced (4/8 GB storage, 90-day history, priority support, 10/25 messages per min, 10/25 groups). Decision (asked): the UI
+  now sells **one paid plan, "Pro"** (₹100/month). Checkout still sends the existing `PREMIUM` plan key so payment-service is
+  untouched (Razorpay stays paused); legacy PLATINUM subscribers keep their plan/price and admin-granted roles show as Pro.
+  Numbers live in frontend `utils/plans.js` (test-pinned): FREE = 5 group chats, 25 members/room, 100 MB, 10 MB files,
+  5 uploads/min; Pro = 500 / 250 / 10 GB / 250 MB / 30 per min; 60 messages/min on every plan (not a paid feature).
+  The backend did NOT actually enforce the documented 500 group-chat cap for paid users (only FREE was capped) — now
+  enforced in room-service, and upgrade prompts say "Upgrade to Pro". If a backend limit changes, update `plans.js`.
 - **#14 endpoints the frontend calls that did not exist — DONE (no frontend change needed)**: (1) `POST
   /auth/forgot-password/phone` and (2) `POST /auth/verify-reset-otp/phone` — SMS password reset, mirroring the email flow
   (purpose `resetphone`, same reset-token JWT, generic "if an account exists" answer, only active LOCAL accounts with a

@@ -126,8 +126,22 @@ class RoomServiceTest {
 
         Room result = svc.createRoom(1, req, "PREMIUM");
         assertEquals("GROUP", result.getType());
-        // Confirm no group-count check was made (paid tier skips the DB query)
-        verify(roomRepo, never()).countByCreatedByIdAndType(anyInt(), eq("GROUP"));
+        verify(roomRepo).countByCreatedByIdAndType(1, "GROUP"); // paid tiers are capped too (500)
+    }
+
+    @Test
+    void createGroup_paidTier_isCappedAt500GroupChats_freeAt5() {
+        CreateRoomRequest req = new CreateRoomRequest();
+        req.setName("One too many"); req.setType("GROUP"); req.setMemberIds(List.of(2));
+        when(roomRepo.countByCreatedByIdAndType(1, "GROUP")).thenReturn(500L);
+
+        ForbiddenException paid = assertThrows(ForbiddenException.class, () -> svc.createRoom(1, req, "PREMIUM"));
+        assertTrue(paid.getMessage().contains("500"), paid.getMessage());
+
+        when(roomRepo.countByCreatedByIdAndType(1, "GROUP")).thenReturn(5L);
+        ForbiddenException free = assertThrows(ForbiddenException.class, () -> svc.createRoom(1, req, "FREE"));
+        assertTrue(free.getMessage().contains("5 group chats") && free.getMessage().contains("Pro"), free.getMessage());
+        verify(roomRepo, never()).save(any());
     }
 
     @Test
@@ -143,7 +157,7 @@ class RoomServiceTest {
 
         Room result = svc.createRoom(1, req, "PLATINUM");
         assertEquals("GROUP", result.getType());
-        verify(roomRepo, never()).countByCreatedByIdAndType(anyInt(), eq("GROUP"));
+        verify(roomRepo).countByCreatedByIdAndType(1, "GROUP");
     }
 
     @Test

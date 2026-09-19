@@ -111,7 +111,7 @@ public class MediaService {
         long maxFileSizeKb = MediaTierLimits.maxFileSizeKb(tier);
         if (file.getSize() / 1024L > maxFileSizeKb) {
             String capHuman = maxFileSizeKb >= 1024L ? (maxFileSizeKb / 1024L) + " MB" : maxFileSizeKb + " KB";
-            throw new FileSizeLimitException("File exceeds your plan's " + capHuman + " per-file limit. Upgrade to Premium for larger uploads.");
+            throw new FileSizeLimitException("File exceeds your plan's " + capHuman + " per-file limit. Upgrade to Pro for larger uploads.");
         }
 
         long capKb = MediaTierLimits.storageCapKb(tier);
