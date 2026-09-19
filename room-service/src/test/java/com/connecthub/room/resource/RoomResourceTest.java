@@ -9,6 +9,7 @@ import com.connecthub.room.repository.RoomMemberRepository;
 import com.connecthub.room.repository.RoomRepository;
 import com.connecthub.room.service.RoomAccess;
 import com.connecthub.room.service.RoomService;
+import com.connecthub.room.service.UserDirectory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,13 +39,14 @@ class RoomResourceTest {
     @Mock private RoomService svc;
     @Mock private RoomRepository roomRepo;
     @Mock private RoomMemberRepository memberRepo;
+    @Mock private UserDirectory users;
 
     private RoomResource res;
     private Room room;
 
     @BeforeEach
     void setUp() {
-        res = new RoomResource(svc, new RoomAccess(roomRepo, memberRepo));
+        res = new RoomResource(svc, new RoomAccess(roomRepo, memberRepo), users);
         room = Room.builder().roomId("r1").type("GROUP").createdById(1).isPrivate(true).inviteCode("SECRET01").build();
         when(roomRepo.findByRoomId("r1")).thenReturn(Optional.of(room));
         when(svc.getRoom("r1")).thenReturn(Optional.of(room));
@@ -294,5 +296,12 @@ class RoomResourceTest {
         room.setPrivate(false);
         when(svc.searchRooms("x")).thenReturn(List.of(room));
         assertNull(res.search("x", 9).getBody().get(0).getInviteCode());
+    }
+
+    @Test
+    void addMember_unknownUser_isRejectedBeforeAnythingIsSaved() {
+        doThrow(new BadRequestException("Unknown user id(s): [9999]")).when(users).requireExist(java.util.List.of(9999), 3);
+        assertThrows(BadRequestException.class, () -> res.addMember("r1", 9999, "MEMBER", 3));
+        verify(svc, never()).addMember(any(), anyInt(), any());
     }
 }

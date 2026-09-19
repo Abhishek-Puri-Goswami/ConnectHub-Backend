@@ -77,6 +77,7 @@ public class RoomService {
     private final RoomRepository roomRepo;
     private final RoomMemberRepository memberRepo;
     private final RoomCacheService cacheService;
+    private final UserDirectory users;
     private final org.springframework.kafka.core.KafkaTemplate<String, Object> kafkaTemplate;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
@@ -106,6 +107,7 @@ public class RoomService {
         List<Integer> memberIds = normalizeMemberIds(req.getMemberIds(), creatorId);
 
         validateCreateRoomRequest(roomType, req.getName(), memberIds, req.getMaxMembers());
+        users.requireExist(memberIds, creatorId); // ids must belong to real accounts
 
         boolean paid = isPaidTier(subscriptionTier);
         int memberCap = paid ? PAID_PLAN_MAX_MEMBERS_PER_ROOM : FREE_PLAN_MAX_MEMBERS_PER_ROOM;

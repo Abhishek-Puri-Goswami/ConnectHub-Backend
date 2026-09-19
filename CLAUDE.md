@@ -257,7 +257,11 @@ scratch e2e scripts into a committed regression suite).
   (now an atomic increment first; 30 parallel guesses are all counted), and the gateway now overwrites the client's
   `X-Forwarded-For` with the real remote address — the existing per-IP limits (forgot-password, OTP) trusted its first
   entry, so they could be dodged by lying. Live-verified (19 checks incl. lock expiry and rotating fake XFF).
-- **Phase 3 remaining**: #16. **Phase 4**: #11 (billing UI still advertises
+- **#16 member validation — DONE**: group/DM creation and add-member accepted any user id (never-existing or deleted
+  accounts became phantom members). room-service now asks auth-service (`UserDirectory` + Feign `AuthClient`, batch lookup
+  with the caller id forwarded) and answers 400 naming every unknown id before anything is saved; if auth-service cannot
+  answer the request fails closed with 503. Self-join by invite code is unaffected. Live-verified (14 checks).
+- **Phase 3 done.** **Phase 4**: #11 (billing UI still advertises
   the old limits), #12, #14. **Phase 5**: P2 hygiene #17–#22.
 
 ## Not yet done

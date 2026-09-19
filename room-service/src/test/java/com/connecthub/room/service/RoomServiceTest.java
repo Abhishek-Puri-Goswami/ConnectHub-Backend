@@ -22,9 +22,36 @@ class RoomServiceTest {
     @Mock RoomRepository roomRepo;
     @Mock RoomMemberRepository memberRepo;
     @Mock RoomCacheService cacheService;
+    @Mock UserDirectory users;
     @InjectMocks RoomService svc;
 
     // ── createRoom ───────────────────────────────────────────────────────────
+
+    @Test
+    void createRoom_verifiesMembersExist_andSavesNothingWhenTheyDoNot() {
+        CreateRoomRequest req = new CreateRoomRequest();
+        req.setType("GROUP");
+        req.setName("Team");
+        req.setMaxMembers(10);
+        req.setMemberIds(java.util.List.of(2, 9999));
+        doThrow(new BadRequestException("Unknown user id(s): [9999]")).when(users).requireExist(java.util.List.of(2, 9999), 1);
+
+        assertThrows(BadRequestException.class, () -> svc.createRoom(1, req, "FREE"));
+
+        verify(users).requireExist(java.util.List.of(2, 9999), 1);
+        verifyNoInteractions(roomRepo);
+    }
+
+    @Test
+    void createRoom_dmWithNonexistentUser_isRejected() {
+        CreateRoomRequest req = new CreateRoomRequest();
+        req.setType("DM");
+        req.setMemberIds(java.util.List.of(424242));
+        doThrow(new BadRequestException("Unknown user id(s): [424242]")).when(users).requireExist(java.util.List.of(424242), 1);
+
+        assertThrows(BadRequestException.class, () -> svc.createRoom(1, req, "FREE"));
+        verifyNoInteractions(roomRepo);
+    }
 
     @Test
     void createGroup_success() {

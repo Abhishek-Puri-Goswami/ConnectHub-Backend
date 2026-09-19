@@ -7,6 +7,7 @@ import com.connecthub.room.exception.ForbiddenException;
 import com.connecthub.room.exception.ResourceNotFoundException;
 import com.connecthub.room.service.RoomAccess;
 import com.connecthub.room.service.RoomService;
+import com.connecthub.room.service.UserDirectory;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -29,6 +30,7 @@ import java.util.*;
 public class RoomResource {
 	private final RoomService svc;
 	private final RoomAccess access;
+	private final UserDirectory users;
 
 	@PostMapping
 	@Operation(summary = "Create room (GROUP or DM)")
@@ -76,6 +78,7 @@ public class RoomResource {
 		if (!RoomAccess.isValidMemberRole(role)) throw new BadRequestException("Invalid role");
 		Room room = svc.getRoom(id).orElseThrow(() -> new ResourceNotFoundException("Room not found"));
 		if ("DM".equals(room.getType())) throw new BadRequestException("Cannot add members to a DM");
+		users.requireExist(java.util.List.of(uid), caller);
 		// Only the creator may hand out the ADMIN role
 		if (RoomAccess.ROLE_ADMIN.equals(role) && !access.isCreator(room, caller))
 			throw new ForbiddenException("Only the room creator can add admins");
