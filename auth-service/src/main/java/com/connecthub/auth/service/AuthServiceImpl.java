@@ -355,7 +355,18 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse refreshToken(String refreshToken) {
         if (!jwtUtil.isValid(refreshToken))
             throw new UnauthorizedException("Invalid refresh token");
-        User user = getUserById(jwtUtil.getUserId(refreshToken));
+        // Only genuine refresh tokens may be exchanged (not access or reset tokens)
+        if (!"refresh".equals(jwtUtil.extractClaim(refreshToken, c -> c.get("type", String.class))))
+            throw new UnauthorizedException("Invalid refresh token");
+        int userId = jwtUtil.getUserId(refreshToken);
+        User user = getUserById(userId);
+        if (!user.isActive() || Boolean.TRUE.equals(redis.hasKey("user:suspended:" + userId)))
+            throw new UnauthorizedException("Account is not active");
+        java.util.Date iat = jwtUtil.extractClaim(refreshToken, io.jsonwebtoken.Claims::getIssuedAt);
+        long iatSeconds = iat != null ? iat.getTime() / 1000 : 0L;
+        if (com.connecthub.auth.config.TokenInvalidation.isInvalidated(iatSeconds,
+                redis.opsForValue().get("user:invalidated:" + userId)))
+            throw new UnauthorizedException("Session expired, please log in again");
         return buildAuthResponse(user);
     }
 

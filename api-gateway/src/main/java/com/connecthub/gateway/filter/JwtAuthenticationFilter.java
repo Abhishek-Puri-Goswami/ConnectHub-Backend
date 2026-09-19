@@ -210,7 +210,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             Mono<Boolean> jtiBlacklisted = (jti != null && !jti.isBlank())
                     ? redisTemplate.hasKey("token:blacklist:" + jti).defaultIfEmpty(false)
                     : Mono.just(false);
-            Mono<Boolean> userInvalidated = redisTemplate.hasKey("user:invalidated:" + userId).defaultIfEmpty(false);
+            final long iatSeconds = claims.getIssuedAt() != null ? claims.getIssuedAt().getTime() / 1000 : 0L;
+            Mono<Boolean> userInvalidated = redisTemplate.opsForValue().get("user:invalidated:" + userId)
+                    .map(v -> TokenInvalidation.isInvalidated(iatSeconds, v))
+                    .defaultIfEmpty(false);
             Mono<Boolean> userSuspended   = redisTemplate.hasKey("user:suspended:" + userId).defaultIfEmpty(false);
 
             return Mono.zip(jtiBlacklisted, userInvalidated, userSuspended)

@@ -68,51 +68,41 @@ short version:
 - **Zipkin (optional — tracing only, nothing breaks without it)**: download
   the self-contained jar per `Native_Zipkin.md`, extract to `D:\zipkin`.
 
-## 5. Edit `start-backend.ps1` for your machine
+## 5. Point `start-backend.ps1` at your install locations
 
-`start-backend.ps1` currently has the paths from the machine this project
-was set up on hardcoded into it — your JDK install location and wherever
-you put Redis/Kafka/Zipkin in step 4 almost certainly won't match. Open the
-script and edit these 4 spots before running it (search the file for
-`D:\` — every hit is one of these):
+Open `start-backend.ps1` and edit the **config block at the very top** — it
+is the only place that holds machine-specific paths:
 
-1. **JAVA_HOME**, near the top:
-   ```powershell
-   $env:JAVA_HOME = "C:\Program Files\Java\latest\jdk-21"
-   ```
-   Change to wherever you installed the JDK, e.g.
-   `C:\Program Files\Eclipse Adoptium\jdk-17.0.x-hotspot`.
+```powershell
+$JavaHome  = "C:\Program Files\Java\latest\jdk-21"   # your JDK install
+$RedisDir  = "D:edis"     # folder containing redis-server.exe
+$KafkaDir  = "D:\kafka"
+$ZipkinDir = "D:\zipkin"
+$StartZipkin = $true        # set $false if you skipped Zipkin in step 4
+```
+Nothing else in the script needs editing. Redis is launched with its own
+folder as working directory and a relative config path (see
+`Native_Redis_Kafka.md` for why).
 
-2. **Redis** — the line starting `Start-Process "D:\redis\redis-server.exe"`:
-   update both `D:\redis\redis-server.exe` and the
-   `-WorkingDirectory "D:\redis"` right after it to wherever you extracted
-   Redis. Both must point at the *same* folder — `redis-server.exe` needs
-   its config file passed as a relative path from its own directory (see
-   `Native_Redis_Kafka.md` for why; passing an absolute path here breaks
-   it in a confusing way).
+`stop-backend.ps1` needs **no edits** — it stops the PIDs
+`start-backend.ps1` recorded in `backend-pids.csv`.
 
-3. **Kafka** — the line starting
-   `$kafkaWrapper = Start-Process "D:\kafka\bin\windows\kafka-server-start.bat"`:
-   three references to update together —
-   `D:\kafka\bin\windows\kafka-server-start.bat`,
-   `D:\kafka\config\kraft\server.properties`, and
-   `-WorkingDirectory "D:\kafka"`.
+Both scripts resolve paths from their own location, so they can be run from
+any directory. `start-backend.ps1` rebuilds the jars automatically when
+source is newer than the jars (`-Build` forces it, `-SkipBuild` skips it),
+waits for every service's health check, and fails fast — with a
+`STARTUP FAILED` message and non-zero exit — if any component (Kafka
+included) doesn't come up.
 
-4. **Zipkin** — inside the `if ($startZipkin)` block: update
-   `D:\zipkin\zipkin-server-exec.jar` and `-WorkingDirectory "D:\zipkin"`.
-   If you skipped installing Zipkin in step 4, set `$startZipkin = $false`
-   instead so the script doesn't try to launch a jar that isn't there.
+### Required Kafka settings on Windows
 
-`stop-backend.ps1` needs **no edits** — it only kills whatever PIDs
-`start-backend.ps1` recorded to `backend-pids.csv`, so it works regardless
-of where anything is actually installed.
-
-One more thing that trips people up: both scripts assume you're running
-them from the `connecthub-backend` repo root
-(`cd connecthub-backend; .\start-backend.ps1`) — the service jar paths
-(`service-registry/target/...`) and `backend-pids.csv` are relative to
-wherever you launch the script *from*, not to the script's own location on
-disk.
+Add these three lines to `config\kraft\server.properties` (Kafka crashes on
+Windows without them — cause and details in `Native_Redis_Kafka.md`):
+```properties
+log.retention.ms=-1
+log.retention.bytes=-1
+log.cleaner.enable=false
+```
 
 ## 6. Create the MySQL databases
 
@@ -264,6 +254,8 @@ changes needed there. Fill in:
   (a different set of values than the service-account JSON — this is the
   public web config)
 - `VITE_ENABLE_PAYMENTS` — `true`/`false`, whether to show the billing UI
+- `VITE_WS_URL` — `http://localhost:8080/ws`. Must be `http(s)://` (SockJS
+  upgrades to a WebSocket itself; a `ws://` value is auto-converted)
 
 ## 10. Run everything
 

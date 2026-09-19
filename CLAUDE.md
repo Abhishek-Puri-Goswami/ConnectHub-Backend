@@ -48,8 +48,9 @@ carried over unverified from Docker Compose's `depends_on` graph. See
 `Config_Server_Reuse.md` for the full finding and how to reactivate it for
 a demo later if ever wanted.
 
-**One command does the whole thing**: `.\start-backend.ps1` (loads `.env`,
-starts Redis, Kafka, then all 11 services in order, each with `-Xmx300m`).
+**One command does the whole thing**: `.\start-backend.ps1` (rebuilds jars if source is
+newer, loads `.env`, starts Redis, Kafka, then all 11 services in order, each with `-Xmx300m`,
+waits on health, fails fast). Machine paths live in its config block at the top.
 `.\stop-backend.ps1` tears it all down cleanly, Redis/Kafka included.
 Verified via a full clean-slate stop/start cycle — all 11 report healthy at
 `http://localhost:<port>/actuator/health`.
@@ -141,6 +142,36 @@ they don't get re-litigated or accidentally reverted later:
   encryption — now correctly attributes both claims separately).
 - 3 real demo accounts seeded through actual API flows (not hand-inserted)
   — see `DETAILS.md` (gitignored, contains real credentials).
+
+## Full-audit remediation plan (22 findings) — status
+Order agreed after the audit. Commit each phase separately; final step is a
+full regression/security retest (two-account attack scenarios; convert the
+scratch e2e scripts into a committed regression suite).
+
+- **Phase 0 — DONE**: #1 WebSocket URL (`VITE_WS_URL` must be `http(s)://`;
+  `toSockJsUrl` also converts `ws://`); minimal #5 start script (build-if-stale,
+  health gates, fail-fast incl. Kafka, graceful Ctrl+C stop); #6 Kafka-on-Windows
+  crash — root cause was retention deletion **and** log-cleaner compaction of
+  `__consumer_offsets`; fixed with `log.retention.ms=-1`, `log.retention.bytes=-1`,
+  `log.cleaner.enable=false` (see `Native_Redis_Kafka.md`).
+- **#3 token invalidation — DONE**: password reset / revoke-all / self-delete /
+  suspend used to lock the user out of the API for the whole invalidation TTL
+  (gateway only checked key *existence*). Now a token is rejected only if its
+  `iat` is older than the stored invalidation time (`TokenInvalidation` helper,
+  duplicated in api-gateway and auth-service because the gateway has no common-lib).
+  Same-second tokens are accepted (JWT `iat` is 1s resolution). The refresh
+  endpoint was hardened in the same change (must be `type=refresh`, user active
+  and not suspended, not invalidated) — otherwise the fix would have left refresh
+  tokens usable after a reset. Verified live with a disposable user.
+- **Phase 1 remaining**: #4 (logout blacklists the whole token but the gateway
+  checks by `jti` — logout doesn't actually revoke), then #2.
+- **Phase 2**: #8 media size cap (multipart 2MB defeats the 10MB/250MB tiers;
+  return 413), **#7 media storage = local disk** (decision: not Cloudinary/S3,
+  consistent with the local-only direction): a `StorageProvider` abstraction with a
+  `LocalDisk` implementation; files served through authenticated or short-lived
+  signed URLs since `<img>` can't send an Authorization header; #13.
+- **Phase 3**: #9, #10, #15, #16. **Phase 4**: #11 (billing UI still advertises
+  the old limits), #12, #14. **Phase 5**: P2 hygiene #17–#22.
 
 ## Not yet done
 - **RAM usage reduction beyond the `-Xmx300m` stopgap** — still not a real

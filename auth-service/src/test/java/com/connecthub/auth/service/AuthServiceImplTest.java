@@ -279,17 +279,49 @@ class AuthServiceImplTest {
 
     // ── refreshToken ─────────────────────────────────────────────────────────
 
+    @SuppressWarnings("unchecked")
+    private void stubRefreshToken(String type, java.util.Date iat) {
+        when(jwtUtil.isValid("rt")).thenReturn(true);
+        org.mockito.Mockito.lenient().when(jwtUtil.getUserId("rt")).thenReturn(1);
+        when(jwtUtil.extractClaim(eq("rt"), any())).thenAnswer(inv -> {
+            io.jsonwebtoken.Claims c = org.mockito.Mockito.mock(io.jsonwebtoken.Claims.class);
+            org.mockito.Mockito.lenient().when(c.get("type", String.class)).thenReturn(type);
+            org.mockito.Mockito.lenient().when(c.getIssuedAt()).thenReturn(iat);
+            return ((java.util.function.Function<io.jsonwebtoken.Claims, Object>) inv.getArgument(1)).apply(c);
+        });
+        org.mockito.Mockito.lenient().when(userRepository.findById(1)).thenReturn(Optional.of(testUser));
+        org.mockito.Mockito.lenient().when(redis.opsForValue()).thenReturn(valueOps);
+    }
+
     @Test
     void refreshToken_valid_returnsNewTokens() {
-        when(jwtUtil.isValid("rt")).thenReturn(true);
-        when(jwtUtil.getUserId("rt")).thenReturn(1);
-        when(userRepository.findById(1)).thenReturn(Optional.of(testUser));
+        stubRefreshToken("refresh", new java.util.Date());
         when(jwtUtil.generateAccessToken(any())).thenReturn("new-access");
         when(jwtUtil.generateRefreshToken(any())).thenReturn("new-refresh");
         when(jwtUtil.getAccessExpiry()).thenReturn(86400000L);
 
         AuthResponse resp = authService.refreshToken("rt");
         assertEquals("new-access", resp.getAccessToken());
+    }
+
+    @Test
+    void refreshToken_notARefreshToken_throws() {
+        stubRefreshToken(null, new java.util.Date());
+        assertThrows(UnauthorizedException.class, () -> authService.refreshToken("rt"));
+    }
+
+    @Test
+    void refreshToken_issuedBeforeInvalidation_throws() {
+        stubRefreshToken("refresh", new java.util.Date(System.currentTimeMillis() - 60_000));
+        when(valueOps.get("user:invalidated:1")).thenReturn(String.valueOf(System.currentTimeMillis()));
+        assertThrows(UnauthorizedException.class, () -> authService.refreshToken("rt"));
+    }
+
+    @Test
+    void refreshToken_suspendedUser_throws() {
+        stubRefreshToken("refresh", new java.util.Date());
+        when(redis.hasKey("user:suspended:1")).thenReturn(true);
+        assertThrows(UnauthorizedException.class, () -> authService.refreshToken("rt"));
     }
 
     @Test

@@ -28,13 +28,14 @@ class JwtAuthenticationFilterTest {
 
     private JwtAuthenticationFilter filter;
     private GatewayFilterChain chain;
+    private ReactiveValueOperations<String, String> ops;
     private final String rawSecret = "fUfwkEaeomu7puBOIl0ftR50UPF4CBPUDxZ0lcaGXL2hY3Zai4DS4YO7l4902IJsKVdHyNjdpCL4LX7IGkw2qg==";
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
         ReactiveStringRedisTemplate redisTemplate = mock(ReactiveStringRedisTemplate.class);
-        ReactiveValueOperations<String, String> ops = mock(ReactiveValueOperations.class);
+        ops = mock(ReactiveValueOperations.class);
         when(redisTemplate.opsForValue()).thenReturn(ops);
 
         // opsForValue().get() — used for tier override lookup ("sub:tier:{userId}")
@@ -114,6 +115,35 @@ class JwtAuthenticationFilterTest {
                    "USER".equals(headers.getFirst("X-User-Role")) &&
                    "PRO".equals(headers.getFirst("X-Subscription-Tier"));
         }));
+    }
+
+    private MockServerWebExchange exchangeFor(String token) {
+        return MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/users/profile")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token).build());
+    }
+
+    @Test
+    void filter_tokenIssuedBeforeInvalidation_returns401() {
+        String token = generateToken("123", "USER", "FREE");
+        when(ops.get("user:invalidated:123"))
+                .thenReturn(Mono.just(String.valueOf(System.currentTimeMillis() + 60_000)));
+        MockServerWebExchange exchange = exchangeFor(token);
+
+        filter.filter(exchange, chain).block();
+
+        verify(chain, never()).filter(any());
+        assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
+    }
+
+    @Test
+    void filter_tokenIssuedAfterInvalidation_forwards() {
+        String token = generateToken("123", "USER", "FREE");
+        when(ops.get("user:invalidated:123"))
+                .thenReturn(Mono.just(String.valueOf(System.currentTimeMillis() - 3_600_000)));
+
+        filter.filter(exchangeFor(token), chain).block();
+
+        verify(chain).filter(any());
     }
 
     @Test

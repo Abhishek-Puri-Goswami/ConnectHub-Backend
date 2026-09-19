@@ -64,7 +64,7 @@ public class AdminResource {
         if (denied != null) return ResponseEntity.status(denied.getStatusCode()).build();
         User u = authService.suspendUser(userId);
         redis.opsForValue().set("user:suspended:" + userId, "1", 30, TimeUnit.DAYS);
-        redis.opsForValue().set("user:invalidated:" + userId, "1", 30, TimeUnit.DAYS);
+        redis.opsForValue().set("user:invalidated:" + userId, String.valueOf(System.currentTimeMillis()), 30, TimeUnit.DAYS);
         redis.convertAndSend(SUSPENDED_CHANNEL, String.valueOf(userId));
         auditService.log(adminId, "USER_SUSPEND", "USER", String.valueOf(userId), "Suspended: " + u.getUsername(), req.getRemoteAddr());
         return ResponseEntity.ok(u);

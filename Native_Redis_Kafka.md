@@ -62,31 +62,43 @@ $uuid = & .\bin\windows\kafka-storage.bat random-uuid
 Verify: `.\bin\windows\kafka-broker-api-versions.bat --bootstrap-server localhost:9092`
 should print a real API-versions list, not a connection error.
 
-### Gotcha: Kafka can crash on startup if old log data exists
+### Gotcha: Kafka crashes on Windows when it cleans up log files (FIXED)
 
-Hit this directly: starting the broker against **pre-existing** topic data
-(from an earlier native run) crashed almost immediately with
+Symptom: the broker runs for a while (or dies right after a restart) with
 ```
 java.nio.file.FileSystemException: ...timeindex -> ...timeindex.deleted:
 The process cannot access the file because it is being used by another process
-...
 ERROR Shutdown broker because all log dirs in D:\kafka\data\kraft-combined-logs have failed
 ```
-This is a well-known Kafka-on-Windows limitation, not specific to this
-project: Kafka's log-segment cleanup renames/deletes segment files as part
-of normal retention housekeeping, which relies on POSIX semantics (you can
-rename/delete a file that's still open elsewhere). Windows refuses this if
-the file is memory-mapped, which Kafka's log reader does. It's most likely
-to bite right after a broker restart if there's existing data with segments
-due for cleanup.
+Root cause (Kafka-on-Windows limitation, KAFKA-1194): Kafka renames/deletes
+segment files while they are memory-mapped, which Windows refuses. **Two**
+background jobs trigger it, and both must be off:
 
-**Fix used:** since this is disposable local dev data, wipe
-`D:\kafka\data\kraft-combined-logs` entirely and re-format storage (the two
-commands above) before starting fresh. If this recurs often enough to be
-annoying, the real fixes are either running Kafka inside WSL2 (Linux
-filesystem semantics, sidesteps the issue — but reintroduces a non-native
-dependency) or tuning `log.segment.bytes`/`log.retention.*` to shrink how
-often cleanup runs — not done here since a clean wipe was sufficient.
+1. **Retention deletion** (old segments past `log.retention.*`).
+2. **Log-cleaner compaction** of `__consumer_offsets` (the cleaner rewrites
+   and swaps segment files). Disabling only retention is *not* enough — this
+   was reproduced with 30,000 keyed records; the broker still died.
+
+**Fix (applied to `D:\kafka\config\kraft\server.properties`; also required
+on any new machine — see SETUP.md):**
+```properties
+log.retention.ms=-1
+log.retention.bytes=-1
+log.cleaner.enable=false
+```
+Trade-off: logs are never trimmed. Irrelevant for a local dev broker with a
+handful of demo accounts; if disk usage ever matters, stop Kafka and wipe
+`D:\kafka\data\kraft-combined-logs`, then re-format storage (commands above).
+Verified by repeated `stop-backend.ps1` / `start-backend.ps1` cycles.
+
+### Start/stop details worth knowing
+- `kafka-server-start.bat` is a wrapper: `Start-Process` records the *cmd*
+  PID, not java's. `start-backend.ps1` polls up to 45s for the real
+  `kafka.Kafka` java child and records that PID (the child appears late — a
+  race that used to leave Kafka orphaned).
+- `stop-backend.ps1` stops services with a real Ctrl+C (so Spring shuts down
+  gracefully), then force-kills only leftovers, and also kills any stray
+  `kafka.Kafka` java process.
 
 ## Rolling back to Docker
 
