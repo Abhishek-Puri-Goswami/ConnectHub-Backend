@@ -261,7 +261,7 @@ scratch e2e scripts into a committed regression suite).
   accounts became phantom members). room-service now asks auth-service (`UserDirectory` + Feign `AuthClient`, batch lookup
   with the caller id forwarded) and answers 400 naming every unknown id before anything is saved; if auth-service cannot
   answer the request fails closed with 503. Self-join by invite code is unaffected. Live-verified (14 checks).
-- **Phase 3 done.** **Phase 4**: #11 (billing UI still advertises
+- **Phase 3 done.**
 - **#11 billing UI vs backend — DONE**: the billing page and upgrade modal advertised Premium/Platinum limits that were never
   enforced (4/8 GB storage, 90-day history, priority support, 10/25 messages per min, 10/25 groups). Decision (asked): the UI
   now sells **one paid plan, "Pro"** (₹100/month). Checkout still sends the existing `PREMIUM` plan key so payment-service is
@@ -278,7 +278,8 @@ scratch e2e scripts into a committed regression suite).
   no room id/creator/members/code), any signed-in user, 404 for unknown/revoked codes. Because codes are only 8 hex chars,
   preview and join lookups are limited to 20/min per user (`InviteLookupLimiter`, 429). Live-verified (27 checks).
   Note: registration only verifies the email, so phone-reset only works for users who verified their phone number.
-  the old limits), #12, #14. **Phase 5**: P2 hygiene #17–#22.
+- **Remaining**: #12 (data cleanup), Phase 5 P2 hygiene #17–#22, then the final regression/security retest (turn the scratch
+  attack/e2e scripts into a committed suite). Also open: refresh-token revocation on logout, phone-login account enumeration.
 
 ## Not yet done
 - **RAM usage reduction beyond the `-Xmx300m` stopgap** — still not a real
