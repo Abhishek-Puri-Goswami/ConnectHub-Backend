@@ -28,7 +28,7 @@ public class SecurityConfig {
     static final String[] PUBLIC_PATHS = {
         "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/login/**", "/api/v1/auth/public/**",
         "/api/v1/auth/verify-registration-otp", "/api/v1/auth/resend-registration-otp",
-        "/api/v1/auth/forgot-password", "/api/v1/auth/verify-reset-otp", "/api/v1/auth/verify-reset-otp/**",
+        "/api/v1/auth/forgot-password", "/api/v1/auth/forgot-password/**", "/api/v1/auth/verify-reset-otp", "/api/v1/auth/verify-reset-otp/**",
         "/api/v1/auth/reset-password", "/api/v1/auth/refresh", "/api/v1/auth/validate",
         "/api/v1/auth/phone/request-otp", "/api/v1/auth/phone/verify-otp"
     };

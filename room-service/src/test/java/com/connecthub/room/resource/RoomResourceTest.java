@@ -40,13 +40,14 @@ class RoomResourceTest {
     @Mock private RoomRepository roomRepo;
     @Mock private RoomMemberRepository memberRepo;
     @Mock private UserDirectory users;
+    @Mock private com.connecthub.room.service.InviteLookupLimiter inviteLimiter;
 
     private RoomResource res;
     private Room room;
 
     @BeforeEach
     void setUp() {
-        res = new RoomResource(svc, new RoomAccess(roomRepo, memberRepo), users);
+        res = new RoomResource(svc, new RoomAccess(roomRepo, memberRepo), users, inviteLimiter);
         room = Room.builder().roomId("r1").type("GROUP").createdById(1).isPrivate(true).inviteCode("SECRET01").build();
         when(roomRepo.findByRoomId("r1")).thenReturn(Optional.of(room));
         when(svc.getRoom("r1")).thenReturn(Optional.of(room));
@@ -303,5 +304,27 @@ class RoomResourceTest {
         doThrow(new BadRequestException("Unknown user id(s): [9999]")).when(users).requireExist(java.util.List.of(9999), 3);
         assertThrows(BadRequestException.class, () -> res.addMember("r1", 9999, "MEMBER", 3));
         verify(svc, never()).addMember(any(), anyInt(), any());
+    }
+
+    @Test
+    void previewByInvite_isOpenToAnySignedInUser_butRateLimited() {
+        var dto = com.connecthub.room.dto.RoomPreviewDto.builder().name("Team").memberCount(3).build();
+        when(svc.previewByInviteCode("ABCD1234")).thenReturn(dto);
+        assertEquals(HttpStatus.OK, res.previewByInvite("ABCD1234", 9).getStatusCode()); // 9 is not a member
+        verify(inviteLimiter).check(9);
+
+        doThrow(new com.connecthub.room.exception.TooManyRequestsException("slow down", 30)).when(inviteLimiter).check(8);
+        assertThrows(com.connecthub.room.exception.TooManyRequestsException.class, () -> res.previewByInvite("ABCD1234", 8));
+    }
+
+    @Test
+    void previewJson_hasTheFieldsTheJoinPageReads_andNothingSensitive() throws Exception {
+        var dto = com.connecthub.room.dto.RoomPreviewDto.builder().name("Team").description("d").isPrivate(true)
+                .memberCount(3).maxMembers(25).build();
+        String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(dto);
+        assertTrue(json.contains("\"isPrivate\":true"), json);
+        assertTrue(json.contains("\"memberCount\":3") && json.contains("\"name\":\"Team\""), json);
+        for (String secret : new String[]{"roomId", "createdBy", "inviteCode", "members"})
+            assertFalse(json.contains(secret), secret + " leaked: " + json);
     }
 }

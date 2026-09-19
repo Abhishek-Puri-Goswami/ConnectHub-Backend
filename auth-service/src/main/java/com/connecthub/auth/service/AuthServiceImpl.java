@@ -437,6 +437,37 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
+     * Phone variant of forgotPassword: sends the reset code by SMS. Like the email flow it always answers with the
+     * same generic message, so it cannot be used to find out which phone numbers have accounts. Only active LOCAL
+     * accounts whose phone number is verified receive a code.
+     */
+    @Override
+    public ApiResponse<Void> forgotPasswordByPhone(PhoneOtpRequest req) {
+        String phone = req.getPhoneNumber();
+        userRepository.findByPhoneNumber(phone).ifPresent(user -> {
+            if (!"LOCAL".equals(user.getProvider()) || !user.isActive() || !user.isPhoneVerified())
+                return;
+            if (!otpService.isOnCooldown("resetphone", phone)) {
+                String otp = otpService.generateAndStore("resetphone", phone, 10);
+                otpService.setCooldown("resetphone", phone, 60);
+                emailPublisher.sendSmsOtp(phone, otp);
+            }
+        });
+        return ApiResponse.ok("If an account with this phone number exists, we have sent a reset code.");
+    }
+
+    /** Verifies the SMS reset code and returns the same short-lived reset token as the email flow. */
+    @Override
+    public ApiResponse<String> verifyPhoneResetOtp(PhoneOtpVerifyRequest req) {
+        if (!otpService.verify("resetphone", req.getPhoneNumber(), req.getOtp()))
+            throw new BadRequestException("Invalid or expired OTP");
+        User user = userRepository.findByPhoneNumber(req.getPhoneNumber())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        String resetToken = jwtUtil.generateResetToken(user.getUserId());
+        return ApiResponse.ok("OTP verified. Use the reset token to set a new password.", resetToken);
+    }
+
+    /**
      * Sets a new password using the reset token issued by verifyResetOtp().
      * Checks the token's signature, expiry, and purpose claim before accepting the change.
      * After resetting, writes a Redis key so that any code checking old tokens knows they

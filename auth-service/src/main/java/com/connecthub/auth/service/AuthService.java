@@ -34,6 +34,8 @@ public interface AuthService {
     // Password recovery
     ApiResponse<Void> forgotPassword(ForgotPasswordRequest request);
     ApiResponse<String> verifyResetOtp(OtpVerifyRequest request);
+    ApiResponse<Void> forgotPasswordByPhone(PhoneOtpRequest request);
+    ApiResponse<String> verifyPhoneResetOtp(PhoneOtpVerifyRequest request);
     ApiResponse<Void> resetPassword(ResetPasswordRequest request);
 
     // OAuth2

@@ -262,6 +262,14 @@ scratch e2e scripts into a committed regression suite).
   with the caller id forwarded) and answers 400 naming every unknown id before anything is saved; if auth-service cannot
   answer the request fails closed with 503. Self-join by invite code is unaffected. Live-verified (14 checks).
 - **Phase 3 done.** **Phase 4**: #11 (billing UI still advertises
+- **#14 endpoints the frontend calls that did not exist — DONE (no frontend change needed)**: (1) `POST
+  /auth/forgot-password/phone` and (2) `POST /auth/verify-reset-otp/phone` — SMS password reset, mirroring the email flow
+  (purpose `resetphone`, same reset-token JWT, generic "if an account exists" answer, only active LOCAL accounts with a
+  *verified* phone get a code, 60s cooldown, 5 guesses per code, same per-IP limit as email); (3) `GET /rooms/join/{code}` —
+  invite preview for the join page: `RoomPreviewDto` (name, description, avatarUrl, isPrivate, memberCount, maxMembers only;
+  no room id/creator/members/code), any signed-in user, 404 for unknown/revoked codes. Because codes are only 8 hex chars,
+  preview and join lookups are limited to 20/min per user (`InviteLookupLimiter`, 429). Live-verified (27 checks).
+  Note: registration only verifies the email, so phone-reset only works for users who verified their phone number.
   the old limits), #12, #14. **Phase 5**: P2 hygiene #17–#22.
 
 ## Not yet done

@@ -155,6 +155,23 @@ public class AuthResource {
         return ResponseEntity.ok(authService.forgotPassword(request));
     }
 
+    @PostMapping("/forgot-password/phone")
+    @Operation(summary = "Request a password reset code by SMS")
+    public ResponseEntity<ApiResponse<Void>> forgotPasswordByPhone(@Valid @RequestBody PhoneOtpRequest request, HttpServletRequest httpReq) {
+        if (!ipRateLimiter.tryAcquireForgotPassword(httpReq)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .header(HttpHeaders.RETRY_AFTER, String.valueOf(ipRateLimiter.getRemainingSeconds("forgotpw", httpReq)))
+                    .body(ApiResponse.<Void>builder().success(false).message("Too many password reset requests. Please try again later.").build());
+        }
+        return ResponseEntity.ok(authService.forgotPasswordByPhone(request));
+    }
+
+    @PostMapping("/verify-reset-otp/phone")
+    @Operation(summary = "Verify the SMS reset code", description = "Returns the reset token used by /reset-password")
+    public ResponseEntity<ApiResponse<String>> verifyPhoneResetOtp(@Valid @RequestBody PhoneOtpVerifyRequest request) {
+        return ResponseEntity.ok(authService.verifyPhoneResetOtp(request));
+    }
+
     @PostMapping("/verify-reset-otp")
     public ResponseEntity<ApiResponse<String>> verifyResetOtp(@Valid @RequestBody OtpVerifyRequest request) {
         return ResponseEntity.ok(authService.verifyResetOtp(request));

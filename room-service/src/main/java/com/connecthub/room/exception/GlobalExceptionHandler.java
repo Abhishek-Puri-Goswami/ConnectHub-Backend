@@ -33,6 +33,13 @@ public class GlobalExceptionHandler extends com.connecthub.common.web.CommonWebE
                 .body(Map.of("error", ex.getMessage(), "status", 403));
     }
 
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<Map<String, Object>> tooMany(TooManyRequestsException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
+                .body(Map.of("error", ex.getMessage(), "status", 429));
+    }
+
     @ExceptionHandler(ServiceUnavailableException.class)
     public ResponseEntity<Map<String, Object>> unavailable(ServiceUnavailableException ex) {
         return error(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());

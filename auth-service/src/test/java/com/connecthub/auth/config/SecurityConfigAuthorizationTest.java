@@ -24,7 +24,7 @@ class SecurityConfigAuthorizationTest {
         for (String open : new String[]{"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/login/email/request-otp",
                 "/api/v1/auth/login/phone/verify-otp", "/api/v1/auth/public/stats", "/api/v1/auth/verify-registration-otp",
                 "/api/v1/auth/resend-registration-otp", "/api/v1/auth/forgot-password", "/api/v1/auth/verify-reset-otp",
-                "/api/v1/auth/verify-reset-otp/phone", "/api/v1/auth/reset-password", "/api/v1/auth/refresh",
+                "/api/v1/auth/verify-reset-otp/phone", "/api/v1/auth/forgot-password/phone", "/api/v1/auth/reset-password", "/api/v1/auth/refresh",
                 "/api/v1/auth/validate", "/api/v1/auth/phone/request-otp", "/api/v1/auth/phone/verify-otp"}) {
             assertTrue(isPublic.test(open), open);
         }

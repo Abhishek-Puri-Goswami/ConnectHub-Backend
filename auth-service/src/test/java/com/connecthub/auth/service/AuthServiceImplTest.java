@@ -291,6 +291,84 @@ class AuthServiceImplTest {
         verify(loginAttempts).recordAccountFailure("n:nobody@example.com");
     }
 
+    // ── password reset by phone ─────────────────────────────────────────────
+
+    private PhoneOtpRequest phoneReq(String phone) {
+        PhoneOtpRequest r = new PhoneOtpRequest();
+        r.setPhoneNumber(phone);
+        return r;
+    }
+
+    @Test
+    void forgotPasswordByPhone_verifiedLocalAccount_getsSms_andGenericAnswer() {
+        testUser.setPhoneNumber("+919812345678");
+        testUser.setPhoneVerified(true);
+        when(userRepository.findByPhoneNumber("+919812345678")).thenReturn(Optional.of(testUser));
+        when(otpService.isOnCooldown("resetphone", "+919812345678")).thenReturn(false);
+        when(otpService.generateAndStore("resetphone", "+919812345678", 10)).thenReturn("123456");
+
+        ApiResponse<Void> resp = authService.forgotPasswordByPhone(phoneReq("+919812345678"));
+
+        verify(emailPublisher).sendSmsOtp("+919812345678", "123456");
+        assertTrue(resp.getMessage().startsWith("If an account"));
+    }
+
+    @Test
+    void forgotPasswordByPhone_answersIdenticallyForUnknownUnverifiedOrOauthAccounts_andSendsNothing() {
+        when(userRepository.findByPhoneNumber("+910000000000")).thenReturn(Optional.empty());
+        ApiResponse<Void> unknown = authService.forgotPasswordByPhone(phoneReq("+910000000000"));
+
+        testUser.setPhoneNumber("+911111111111");
+        testUser.setPhoneVerified(false); // unverified phone: no SMS
+        when(userRepository.findByPhoneNumber("+911111111111")).thenReturn(Optional.of(testUser));
+        ApiResponse<Void> unverified = authService.forgotPasswordByPhone(phoneReq("+911111111111"));
+
+        User oauth = User.builder().userId(9).username("g").email("g@x.com").provider("GOOGLE").phoneNumber("+912222222222").phoneVerified(true).build();
+        when(userRepository.findByPhoneNumber("+912222222222")).thenReturn(Optional.of(oauth));
+        ApiResponse<Void> oauthResp = authService.forgotPasswordByPhone(phoneReq("+912222222222"));
+
+        assertEquals(unknown.getMessage(), unverified.getMessage());
+        assertEquals(unknown.getMessage(), oauthResp.getMessage());
+        verifyNoInteractions(emailPublisher);
+    }
+
+    @Test
+    void forgotPasswordByPhone_respectsTheCooldown() {
+        testUser.setPhoneNumber("+919812345678");
+        testUser.setPhoneVerified(true);
+        when(userRepository.findByPhoneNumber("+919812345678")).thenReturn(Optional.of(testUser));
+        when(otpService.isOnCooldown("resetphone", "+919812345678")).thenReturn(true);
+
+        authService.forgotPasswordByPhone(phoneReq("+919812345678"));
+
+        verify(otpService, never()).generateAndStore(any(), any(), anyInt());
+        verifyNoInteractions(emailPublisher);
+    }
+
+    @Test
+    void verifyPhoneResetOtp_correctCode_returnsResetToken() {
+        testUser.setPhoneNumber("+919812345678");
+        PhoneOtpVerifyRequest req = new PhoneOtpVerifyRequest();
+        req.setPhoneNumber("+919812345678");
+        req.setOtp("123456");
+        when(otpService.verify("resetphone", "+919812345678", "123456")).thenReturn(true);
+        when(userRepository.findByPhoneNumber("+919812345678")).thenReturn(Optional.of(testUser));
+        when(jwtUtil.generateResetToken(testUser.getUserId())).thenReturn("reset-token");
+
+        assertEquals("reset-token", authService.verifyPhoneResetOtp(req).getData());
+    }
+
+    @Test
+    void verifyPhoneResetOtp_wrongCode_isRejected_andIssuesNoToken() {
+        PhoneOtpVerifyRequest req = new PhoneOtpVerifyRequest();
+        req.setPhoneNumber("+919812345678");
+        req.setOtp("000000");
+        when(otpService.verify("resetphone", "+919812345678", "000000")).thenReturn(false);
+
+        assertThrows(BadRequestException.class, () -> authService.verifyPhoneResetOtp(req));
+        verify(jwtUtil, never()).generateResetToken(anyInt());
+    }
+
     // ── logout ───────────────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")

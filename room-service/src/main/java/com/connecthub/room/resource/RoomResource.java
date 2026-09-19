@@ -6,6 +6,7 @@ import com.connecthub.room.exception.BadRequestException;
 import com.connecthub.room.exception.ForbiddenException;
 import com.connecthub.room.exception.ResourceNotFoundException;
 import com.connecthub.room.service.RoomAccess;
+import com.connecthub.room.service.InviteLookupLimiter;
 import com.connecthub.room.service.RoomService;
 import com.connecthub.room.service.UserDirectory;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,6 +32,7 @@ public class RoomResource {
 	private final RoomService svc;
 	private final RoomAccess access;
 	private final UserDirectory users;
+	private final InviteLookupLimiter inviteLimiter;
 
 	@PostMapping
 	@Operation(summary = "Create room (GROUP or DM)")
@@ -212,11 +214,21 @@ public class RoomResource {
 		return ResponseEntity.ok(Map.of("inviteCode", code));
 	}
 
+	@GetMapping("/join/{code}")
+	@Operation(summary = "Preview a room from its invite code", description = "Minimal public info shown on the join page; no membership needed")
+	public ResponseEntity<com.connecthub.room.dto.RoomPreviewDto> previewByInvite(
+			@PathVariable String code,
+			@RequestHeader("X-User-Id") int uid) {
+		inviteLimiter.check(uid);
+		return ResponseEntity.ok(svc.previewByInviteCode(code));
+	}
+
 	@PostMapping("/join/{code}")
 	@Operation(summary = "Join a room by invite code")
 	public ResponseEntity<RoomMember> joinByInvite(
 			@PathVariable String code,
 			@RequestHeader("X-User-Id") int uid) {
+		inviteLimiter.check(uid);
 		return ResponseEntity.ok(svc.joinByInviteCode(code, uid));
 	}
 

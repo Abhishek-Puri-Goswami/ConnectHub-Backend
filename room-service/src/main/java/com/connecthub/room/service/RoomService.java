@@ -448,6 +448,19 @@ public class RoomService {
      * The invite code is validated and the user is added as a MEMBER. If the user
      * is already a member, the existing membership is returned silently (idempotent).
      */
+    /** What an invite link may reveal about its room (see RoomPreviewDto). Unknown or revoked codes are a 404. */
+    @Transactional(readOnly = true)
+    public com.connecthub.room.dto.RoomPreviewDto previewByInviteCode(String inviteCode) {
+        Room room = roomRepo.findByInviteCode(inviteCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Invalid invite code"));
+        return com.connecthub.room.dto.RoomPreviewDto.builder()
+                .name(room.getName()).description(room.getDescription()).avatarUrl(room.getAvatarUrl())
+                .isPrivate(room.isPrivate())
+                .memberCount(memberRepo.countByRoomId(room.getRoomId()))
+                .maxMembers(room.getMaxMembers())
+                .build();
+    }
+
     public RoomMember joinByInviteCode(String inviteCode, int userId) {
         Room room = roomRepo.findByInviteCode(inviteCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Invalid invite code"));
