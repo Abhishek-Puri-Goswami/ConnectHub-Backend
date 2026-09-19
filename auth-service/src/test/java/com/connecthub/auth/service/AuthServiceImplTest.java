@@ -248,33 +248,62 @@ class AuthServiceImplTest {
 
     // ── logout ───────────────────────────────────────────────────────────────
 
+    @SuppressWarnings("unchecked")
+    private void stubAccessToken(String tok, String jti, java.util.Date exp) {
+        when(jwtUtil.isValid(tok)).thenReturn(true);
+        when(jwtUtil.extractClaim(eq(tok), any())).thenAnswer(inv -> {
+            io.jsonwebtoken.Claims c = org.mockito.Mockito.mock(io.jsonwebtoken.Claims.class);
+            org.mockito.Mockito.lenient().when(c.get("jti", String.class)).thenReturn(jti);
+            org.mockito.Mockito.lenient().when(c.getExpiration()).thenReturn(exp);
+            org.mockito.Mockito.lenient().when(c.getSubject()).thenReturn("1");
+            return ((java.util.function.Function<io.jsonwebtoken.Claims, Object>) inv.getArgument(1)).apply(c);
+        });
+    }
+
     @Test
-    void logout_blacklistsToken() {
+    void logout_blacklistsJtiForRemainingLifetime() {
+        stubAccessToken("mytoken", "jti-1", new java.util.Date(System.currentTimeMillis() + 600_000));
         when(redis.opsForValue()).thenReturn(valueOps);
         authService.logout("Bearer mytoken");
-        verify(valueOps).set(eq("token:blacklist:mytoken"), eq("1"), anyLong(), any());
+        verify(valueOps).set(eq("token:blacklist:jti-1"), eq("1"), longThat(t -> t > 500 && t <= 600), any());
+        verify(redis).delete("session:1:jti-1");
     }
 
     @Test
     void logout_tokenWithoutBearer_stillBlacklisted() {
+        stubAccessToken("rawtoken", "jti-2", new java.util.Date(System.currentTimeMillis() + 600_000));
         when(redis.opsForValue()).thenReturn(valueOps);
         authService.logout("rawtoken");
-        verify(valueOps).set(eq("token:blacklist:rawtoken"), eq("1"), anyLong(), any());
+        verify(valueOps).set(eq("token:blacklist:jti-2"), eq("1"), anyLong(), any());
+    }
+
+    @Test
+    void logout_invalidToken_isNoOp() {
+        when(jwtUtil.isValid("junk")).thenReturn(false);
+        authService.logout("Bearer junk");
+        verifyNoInteractions(valueOps);
     }
 
     // ── validateToken ────────────────────────────────────────────────────────
 
     @Test
-    void validateToken_blacklisted_returnsFalse() {
-        when(redis.hasKey("token:blacklist:tok")).thenReturn(true);
+    void validateToken_blacklistedJti_returnsFalse() {
+        stubAccessToken("tok", "jti-3", new java.util.Date(System.currentTimeMillis() + 600_000));
+        when(redis.hasKey("token:blacklist:jti-3")).thenReturn(true);
         assertFalse(authService.validateToken("tok"));
     }
 
     @Test
     void validateToken_valid_returnsTrue() {
-        when(redis.hasKey("token:blacklist:tok")).thenReturn(false);
-        when(jwtUtil.isValid("tok")).thenReturn(true);
+        stubAccessToken("tok", "jti-4", new java.util.Date(System.currentTimeMillis() + 600_000));
+        when(redis.hasKey("token:blacklist:jti-4")).thenReturn(false);
         assertTrue(authService.validateToken("tok"));
+    }
+
+    @Test
+    void validateToken_badSignature_returnsFalse() {
+        when(jwtUtil.isValid("bad")).thenReturn(false);
+        assertFalse(authService.validateToken("bad"));
     }
 
     // ── refreshToken ─────────────────────────────────────────────────────────

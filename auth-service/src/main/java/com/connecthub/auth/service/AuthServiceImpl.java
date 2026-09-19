@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit;
  *   so MySQL can use a cheaper read path.
  *
  * Token blacklist:
- *   On logout the access token is written to Redis ("token:blacklist:{token}")
+ *   On logout the access token's jti is written to Redis ("token:blacklist:{jti}")
  *   with a 24-hour TTL. The validateToken() endpoint checks this before
  *   confirming a token is valid — so logout takes effect immediately even if the
  *   JWT hasn't expired yet.
@@ -323,27 +323,38 @@ public class AuthServiceImpl implements AuthService {
     // =========================================================================
 
     /**
-     * Invalidates the access token by storing it in Redis with a 24-hour TTL.
-     * Any subsequent request with this token will be rejected by validateToken().
-     * The key expires on its own after 24 hours, matching the token's max lifetime.
+     * Revokes the presented access token. The gateway rejects tokens by their {@code jti}
+     * ("token:blacklist:{jti}"), so that is what is stored — with a TTL equal to the token's
+     * remaining lifetime, after which it is expired anyway. A token that is already invalid
+     * or expired has nothing left to revoke, so this is a no-op for it.
      */
     @Override
     public void logout(String token) {
         if (token != null && token.startsWith("Bearer "))
             token = token.substring(7);
-        redis.opsForValue().set(TOKEN_BLACKLIST + token, "1", 24, TimeUnit.HOURS);
+        if (token == null || !jwtUtil.isValid(token))
+            return;
+        String jti = jwtUtil.extractClaim(token, c -> c.get("jti", String.class));
+        java.util.Date exp = jwtUtil.extractClaim(token, io.jsonwebtoken.Claims::getExpiration);
+        if (jti == null || jti.isBlank())
+            return;
+        long ttlSeconds = exp != null ? (exp.getTime() - System.currentTimeMillis()) / 1000 : 0;
+        if (ttlSeconds < 1)
+            return;
+        redis.opsForValue().set(TOKEN_BLACKLIST + jti, "1", ttlSeconds, TimeUnit.SECONDS);
+        Integer userId = jwtUtil.extractClaim(token, c -> Integer.valueOf(c.getSubject()));
+        redis.delete("session:" + userId + ":" + jti);
     }
 
     /**
-     * Returns true only if the token passes both the blacklist check and signature/expiry check.
-     * Used by the /auth/validate endpoint — the gateway can call this instead of
-     * verifying locally if needed.
+     * Returns true only if the token's jti is not revoked and its signature/expiry are valid.
      */
     @Override
     public boolean validateToken(String token) {
-        if (Boolean.TRUE.equals(redis.hasKey(TOKEN_BLACKLIST + token)))
+        if (!jwtUtil.isValid(token))
             return false;
-        return jwtUtil.isValid(token);
+        String jti = jwtUtil.extractClaim(token, c -> c.get("jti", String.class));
+        return jti == null || !Boolean.TRUE.equals(redis.hasKey(TOKEN_BLACKLIST + jti));
     }
 
     /**

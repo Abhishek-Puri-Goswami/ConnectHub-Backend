@@ -163,8 +163,12 @@ scratch e2e scripts into a committed regression suite).
   endpoint was hardened in the same change (must be `type=refresh`, user active
   and not suspended, not invalidated) — otherwise the fix would have left refresh
   tokens usable after a reset. Verified live with a disposable user.
-- **Phase 1 remaining**: #4 (logout blacklists the whole token but the gateway
-  checks by `jti` — logout doesn't actually revoke), then #2.
+- **#4 logout — DONE**: logout used to blacklist the whole token string while the
+  gateway checks `token:blacklist:<jti>`, so logout revoked nothing. It now
+  blacklists the `jti` for the token's remaining lifetime (other sessions unaffected;
+  `/auth/validate` checks it too). Known remaining gap: the refresh token is not
+  revoked by logout (refresh tokens carry no jti) — decide with #2.
+- **Phase 1 remaining**: #2.
 - **Phase 2**: #8 media size cap (multipart 2MB defeats the 10MB/250MB tiers;
   return 413), **#7 media storage = local disk** (decision: not Cloudinary/S3,
   consistent with the local-only direction): a `StorageProvider` abstraction with a
