@@ -118,7 +118,12 @@ public class MediaResource {
 
     /** Platform-wide total storage used in megabytes. Called by auth-service Feign client and admin dashboard. */
     @GetMapping("/storage/total")
-    public ResponseEntity<Double> totalStorage() {
+    public ResponseEntity<Double> totalStorage(
+            @RequestHeader(value = "X-Internal-Service", required = false) String internal,
+            @RequestHeader(value = "X-User-Role", defaultValue = "") String role) {
+        boolean isInternal = internal != null && !internal.isBlank();
+        boolean admin = "ADMIN".equalsIgnoreCase(role) || "PLATFORM_ADMIN".equalsIgnoreCase(role);
+        if (!isInternal && !admin) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         return ResponseEntity.ok(svc.getTotalStorageMb());
     }
 

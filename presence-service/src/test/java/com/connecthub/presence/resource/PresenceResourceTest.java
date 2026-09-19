@@ -32,7 +32,7 @@ class PresenceResourceTest {
 
     @Test
     void online_callsServiceAndReturnsOk() {
-        ResponseEntity<Void> response = resource.online(1, Map.of("deviceType", "WEB", "sessionId", "s1"));
+        ResponseEntity<Void> response = resource.online(1, Map.of("deviceType", "WEB", "sessionId", "s1"), 1);
 
         verify(service).setOnline(1, "WEB", "s1");
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -40,7 +40,7 @@ class PresenceResourceTest {
 
     @Test
     void offline_callsServiceAndReturnsOk() {
-        ResponseEntity<Void> response = resource.offline(2);
+        ResponseEntity<Void> response = resource.offline(2, 2);
 
         verify(service).setOffline(2);
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -48,7 +48,7 @@ class PresenceResourceTest {
 
     @Test
     void status_callsServiceAndReturnsNoContent() {
-        ResponseEntity<Void> response = resource.status(3, Map.of("status", "AWAY", "customMessage", "brb"));
+        ResponseEntity<Void> response = resource.status(3, Map.of("status", "AWAY", "customMessage", "brb"), 3);
 
         verify(service).updateStatus(3, "AWAY", "brb");
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
@@ -92,15 +92,31 @@ class PresenceResourceTest {
         when(service.getOnlineUserIds()).thenReturn(List.of(1, 2));
         when(service.isOnline(7)).thenReturn(true);
 
-        ResponseEntity<Integer> countResponse = resource.count();
-        ResponseEntity<List<Integer>> usersResponse = resource.onlineUsers();
+        ResponseEntity<Integer> countResponse = resource.count("auth-service", "");
+        ResponseEntity<List<Integer>> usersResponse = resource.onlineUsers("websocket-service", "");
         ResponseEntity<Boolean> checkResponse = resource.check(7);
-        ResponseEntity<Void> pingResponse = resource.ping(7);
+        ResponseEntity<Void> pingResponse = resource.ping(7, 7);
 
         assertEquals(7, countResponse.getBody());
         assertEquals(List.of(1, 2), usersResponse.getBody());
         assertEquals(Boolean.TRUE, checkResponse.getBody());
         assertEquals(HttpStatus.OK, pingResponse.getStatusCode());
         verify(service).ping(7);
+    }
+
+    @Test
+    void writes_forOtherUsers_areForbidden() {
+        assertEquals(HttpStatus.FORBIDDEN, resource.online(1, Map.of("deviceType", "WEB"), 2).getStatusCode());
+        assertEquals(HttpStatus.FORBIDDEN, resource.offline(1, 2).getStatusCode());
+        assertEquals(HttpStatus.FORBIDDEN, resource.status(1, Map.of("status", "AWAY"), 2).getStatusCode());
+        assertEquals(HttpStatus.FORBIDDEN, resource.ping(1, 2).getStatusCode());
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void aggregateReads_requireInternalOrAdmin() {
+        assertEquals(HttpStatus.FORBIDDEN, resource.count(null, "USER").getStatusCode());
+        assertEquals(HttpStatus.FORBIDDEN, resource.onlineUsers(null, "USER").getStatusCode());
+        assertEquals(HttpStatus.OK, resource.count(null, "PLATFORM_ADMIN").getStatusCode());
     }
 }

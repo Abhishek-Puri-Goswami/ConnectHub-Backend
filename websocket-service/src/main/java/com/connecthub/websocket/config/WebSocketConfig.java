@@ -53,6 +53,7 @@ import org.springframework.web.socket.config.annotation.*;
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final JwtChannelInterceptor jwtInterceptor;
+    private final com.connecthub.websocket.interceptor.RoomAccessInterceptor roomAccessInterceptor;
 
     /**
      * configureMessageBroker — sets up the in-memory STOMP broker and destination prefixes.
@@ -89,7 +90,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
      */
     @Override
     public void configureClientInboundChannel(ChannelRegistration reg) {
-        reg.interceptors(jwtInterceptor);
+        reg.interceptors(jwtInterceptor, roomAccessInterceptor);
         reg.taskExecutor().corePoolSize(8).maxPoolSize(32).queueCapacity(200);
     }
 

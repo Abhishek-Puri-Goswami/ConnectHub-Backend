@@ -120,9 +120,9 @@ class NotifResourceEmailPreferenceTest {
 
     @Test
     void removeDeviceToken_deletesToken() {
-        ResponseEntity<Void> resp = resource.removeDeviceToken("tok_to_remove");
+        ResponseEntity<Void> resp = resource.removeDeviceToken("tok_to_remove", 5);
 
         assertEquals(HttpStatus.NO_CONTENT, resp.getStatusCode());
-        verify(deviceTokenRepo).deleteByFcmToken("tok_to_remove");
+        verify(deviceTokenRepo).deleteByFcmTokenAndUserId("tok_to_remove", 5);
     }
 }

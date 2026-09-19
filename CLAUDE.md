@@ -168,7 +168,30 @@ scratch e2e scripts into a committed regression suite).
   blacklists the `jti` for the token's remaining lifetime (other sessions unaffected;
   `/auth/validate` checks it too). Known remaining gap: the refresh token is not
   revoked by logout (refresh tokens carry no jti) — decide with #2.
-- **Phase 1 remaining**: #2.
+- **#2 authorization / tenant isolation — DONE**: any authenticated user could read/post
+  into/rename/delete other users' rooms, forge notifications, force users offline, and
+  subscribe to or inject into private rooms over WebSocket. Now enforced per service
+  (caller = gateway-injected `X-User-Id`/`X-User-Role`):
+  - room-service `RoomAccess`: member for read/members/pin; room ADMIN for update/add/kick/roles;
+    only the creator can delete, grant ADMIN, or manage invite codes; the creator can't be
+    demoted/kicked; own-only for `read`/`byUser`/mute; `GET /rooms` is platform-admin only;
+    invite codes are returned to the creator only.
+  - message-service: membership (via room-service) for send/history/search/unread/reactions,
+    room ADMIN for clear; sender id is forced from the header; page size capped at 100.
+  - notification-service: own notifications only; creating notifications is internal-only.
+  - presence-service: writes only for self; aggregate reads internal/admin only.
+  - websocket-service: `RoomAccessInterceptor` guards SUBSCRIBE (room topics = members only, other
+    users' queues denied, unknown topics denied, frames without a principal rejected); every chat
+    handler checks membership and edit/delete relays also check authorship; CONNECT now rejects
+    revoked tokens (jti blacklist / suspended / invalidated) like the gateway.
+  - Internal calls are identified by `X-Internal-Service` (set by each service's Feign
+    interceptor); the gateway now **strips that header** from external requests. It is a marker,
+    not a secret: anything reaching a service port directly can still set it (that is #9).
+  - Platform admins get room-list/delete/kick and stats endpoints, but NOT room content.
+  - Live-verified with a 3-account attack script (78 checks). Known behaviour: membership checks
+    fail closed, so for the first ~minute after boot (before room-service is reachable from
+    websocket/message-service) chat can be rejected.
+- **Phase 1 remaining**: refresh-token revocation on logout (see #4 note).
 - **Phase 2**: #8 media size cap (multipart 2MB defeats the 10MB/250MB tiers;
   return 413), **#7 media storage = local disk** (decision: not Cloudinary/S3,
   consistent with the local-only direction): a `StorageProvider` abstraction with a

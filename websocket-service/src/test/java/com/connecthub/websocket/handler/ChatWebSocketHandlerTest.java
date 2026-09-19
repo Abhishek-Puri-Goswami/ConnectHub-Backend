@@ -33,6 +33,7 @@ class ChatWebSocketHandlerTest {
     @Mock private com.connecthub.websocket.service.UnreadCountService unreadCountService;
     @Mock private com.connecthub.websocket.client.RoomServiceClient roomServiceClient;
     @Mock private MentionHandler mentionHandler;
+    @Mock private com.connecthub.websocket.service.RoomAccessService roomAccess;
     @InjectMocks private ChatWebSocketHandler handler;
 
     private SimpMessageHeaderAccessor headers;
@@ -41,6 +42,8 @@ class ChatWebSocketHandlerTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(roomAccess.isMember(any(), anyInt())).thenReturn(true);
+        lenient().when(roomAccess.isAuthor(any(), any(), anyInt())).thenReturn(true);
         headers = SimpMessageHeaderAccessor.create();
         headers.setUser(principal);
     }
@@ -335,5 +338,57 @@ class ChatWebSocketHandlerTest {
         when(mapper.writeValueAsString(any())).thenThrow(new RuntimeException("err"));
 
         assertDoesNotThrow(() -> handler.handleUnpin(p, headers));
+    }
+
+    // ── authorization ───────────────────────────────────────────────────────
+
+    @Test
+    void handleChat_nonMember_isDroppedAndNeverBroadcastOrPersisted() throws Exception {
+        when(roomAccess.isMember("private-room", 1)).thenReturn(false);
+        ChatMessagePayload p = new ChatMessagePayload();
+        p.setRoomId("private-room"); p.setContent("injected"); p.setType("TEXT");
+
+        handler.handleChat(p, headers);
+
+        verifyNoInteractions(redis, persistenceService, messageServiceClient, deliveryService);
+    }
+
+    @Test
+    void otherRoomEvents_fromNonMember_areDropped() throws Exception {
+        when(roomAccess.isMember("private-room", 1)).thenReturn(false);
+
+        TypingIndicatorPayload typing = new TypingIndicatorPayload();
+        typing.setRoomId("private-room");
+        handler.handleTyping(typing, headers);
+
+        ReadReceiptPayload read = new ReadReceiptPayload();
+        read.setRoomId("private-room");
+        handler.handleRead(read, headers);
+
+        ReactionPayload react = new ReactionPayload();
+        react.setRoomId("private-room");
+        handler.handleReaction(react, headers);
+
+        PinMessagePayload pin = new PinMessagePayload();
+        pin.setRoomId("private-room"); pin.setMessageId("m1");
+        handler.handlePin(pin, headers);
+        handler.handleUnpin(pin, headers);
+
+        verifyNoInteractions(messaging, redis, roomServiceClient, typingService, unreadCountService);
+    }
+
+    @Test
+    void editAndDelete_ofSomeoneElsesMessage_areDropped() throws Exception {
+        when(roomAccess.isAuthor("m1", "r1", 1)).thenReturn(false);
+
+        MessageEditPayload edit = new MessageEditPayload();
+        edit.setRoomId("r1"); edit.setMessageId("m1"); edit.setNewContent("hacked");
+        handler.handleEdit(edit, headers);
+
+        MessageDeletePayload del = new MessageDeletePayload();
+        del.setRoomId("r1"); del.setMessageId("m1");
+        handler.handleDelete(del, headers);
+
+        verifyNoInteractions(redis);
     }
 }

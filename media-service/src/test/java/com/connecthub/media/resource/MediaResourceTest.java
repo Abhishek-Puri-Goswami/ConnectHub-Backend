@@ -177,7 +177,7 @@ class MediaResourceTest {
     void totalStorage_delegatesToService() {
         when(svc.getTotalStorageMb()).thenReturn(512.5);
 
-        ResponseEntity<Double> resp = resource.totalStorage();
+        ResponseEntity<Double> resp = resource.totalStorage("auth-service", "");
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resp.getBody()).isEqualTo(512.5);
@@ -192,5 +192,12 @@ class MediaResourceTest {
         ResponseEntity<List<MediaFile>> resp = resource.byRoom("room1", 1);
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void totalStorage_endUserForbidden_adminAllowed() {
+        assertThat(resource.totalStorage(null, "USER").getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        when(svc.getTotalStorageMb()).thenReturn(1.0);
+        assertThat(resource.totalStorage(null, "PLATFORM_ADMIN").getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 }

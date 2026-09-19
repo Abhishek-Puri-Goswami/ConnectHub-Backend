@@ -135,7 +135,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      * X-User-Id: 1 to impersonate the admin user.
      */
     private static final List<String> INTERNAL_HEADERS = List.of(
-            "X-User-Id", "X-User-Email", "X-User-Username", "X-User-Role", "X-Subscription-Tier"
+            "X-User-Id", "X-User-Email", "X-User-Username", "X-User-Role", "X-Subscription-Tier",
+            "X-Internal-Service"
     );
 
     @Override

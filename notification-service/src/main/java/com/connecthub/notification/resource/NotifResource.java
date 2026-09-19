@@ -1,4 +1,6 @@
 package com.connecthub.notification.resource;
+import com.connecthub.notification.exception.ForbiddenException;
+import com.connecthub.notification.exception.ResourceNotFoundException;
 import com.connecthub.notification.entity.DeviceToken;
 import com.connecthub.notification.entity.Notification;
 import com.connecthub.notification.entity.UserEmailPreference;
@@ -22,14 +24,31 @@ public class NotifResource {
     private final DeviceTokenRepository deviceTokenRepo;
     private final UserEmailPreferenceRepository emailPrefRepo;
 
-    @PostMapping public ResponseEntity<Notification> send(@RequestBody Notification n) { return ResponseEntity.status(HttpStatus.CREATED).body(svc.send(n)); }
-    @GetMapping("/user/{uid}") public ResponseEntity<List<Notification>> get(@PathVariable int uid) { return ResponseEntity.ok(svc.getByRecipient(uid)); }
-    @PutMapping("/{id}/read") public ResponseEntity<Void> read(@PathVariable int id) { svc.markRead(id); return ResponseEntity.noContent().build(); }
-    @PutMapping("/user/{uid}/read-all") public ResponseEntity<Void> readAll(@PathVariable int uid) { svc.markAllRead(uid); return ResponseEntity.noContent().build(); }
-    @GetMapping("/user/{uid}/unread-count") public ResponseEntity<Integer> unread(@PathVariable int uid) { return ResponseEntity.ok(svc.unreadCount(uid)); }
-    @DeleteMapping("/{id}") public ResponseEntity<Void> del(@PathVariable int id) { svc.delete(id); return ResponseEntity.noContent().build(); }
+    /** Internal only — other services create notifications for users; end users may not (forgery). */
+    @PostMapping public ResponseEntity<Notification> send(@RequestBody Notification n,
+            @RequestHeader(value = "X-Internal-Service", required = false) String internal) {
+        if (internal == null || internal.isBlank()) throw new ForbiddenException("Internal endpoint");
+        return ResponseEntity.status(HttpStatus.CREATED).body(svc.send(n));
+    }
+    @GetMapping("/user/{uid}") public ResponseEntity<List<Notification>> get(@PathVariable int uid,
+            @RequestHeader("X-User-Id") int caller) { requireSelf(uid, caller); return ResponseEntity.ok(svc.getByRecipient(uid)); }
+    @PutMapping("/{id}/read") public ResponseEntity<Void> read(@PathVariable int id,
+            @RequestHeader("X-User-Id") int caller) { requireOwner(id, caller); svc.markRead(id); return ResponseEntity.noContent().build(); }
+    @PutMapping("/user/{uid}/read-all") public ResponseEntity<Void> readAll(@PathVariable int uid,
+            @RequestHeader("X-User-Id") int caller) { requireSelf(uid, caller); svc.markAllRead(uid); return ResponseEntity.noContent().build(); }
+    @GetMapping("/user/{uid}/unread-count") public ResponseEntity<Integer> unread(@PathVariable int uid,
+            @RequestHeader("X-User-Id") int caller) { requireSelf(uid, caller); return ResponseEntity.ok(svc.unreadCount(uid)); }
+    @DeleteMapping("/{id}") public ResponseEntity<Void> del(@PathVariable int id,
+            @RequestHeader("X-User-Id") int caller) { requireOwner(id, caller); svc.delete(id); return ResponseEntity.noContent().build(); }
 
-    // ── Email notification preferences ────────────────────────────────────────
+    private static void requireSelf(int uid, int caller) {
+        if (uid != caller) throw new ForbiddenException("Not allowed");
+    }
+
+    private void requireOwner(int notificationId, int caller) {
+        int owner = svc.recipientOf(notificationId).orElseThrow(() -> new ResourceNotFoundException("Notification not found"));
+        if (owner != caller) throw new ForbiddenException("Not allowed");
+    }
 
     @GetMapping("/email-preferences")
     @Operation(summary = "Get email notification preference for the authenticated user")
@@ -79,8 +98,9 @@ public class NotifResource {
     }
 
     @DeleteMapping("/device-token/{fcmToken}")
-    public ResponseEntity<Void> removeDeviceToken(@PathVariable String fcmToken) {
-        deviceTokenRepo.deleteByFcmToken(fcmToken);
+    public ResponseEntity<Void> removeDeviceToken(@PathVariable String fcmToken,
+            @RequestHeader("X-User-Id") int userId) {
+        deviceTokenRepo.deleteByFcmTokenAndUserId(fcmToken, userId); // only the caller's own token
         return ResponseEntity.noContent().build();
     }
 }

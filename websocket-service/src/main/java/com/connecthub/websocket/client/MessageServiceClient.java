@@ -14,4 +14,8 @@ public interface MessageServiceClient {
             @RequestBody Map<String, Object> body,
             @org.springframework.web.bind.annotation.RequestHeader("X-User-Id") String userId,
             @org.springframework.web.bind.annotation.RequestHeader(value = "X-Subscription-Tier", required = false) String subscriptionTier);
+
+    /** Returns senderId and roomId of a message (internal endpoint). */
+    @org.springframework.web.bind.annotation.GetMapping("/api/v1/messages/{messageId}/sender")
+    Map<String, Object> getSender(@org.springframework.web.bind.annotation.PathVariable("messageId") String messageId);
 }

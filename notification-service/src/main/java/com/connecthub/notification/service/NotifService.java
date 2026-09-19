@@ -115,6 +115,10 @@ public class NotifService {
      */
     public void delete(int id) { repo.deleteById(id); }
 
+    /** Recipient of a notification, empty if it does not exist — used for ownership checks. */
+    @Transactional(readOnly = true)
+    public java.util.Optional<Integer> recipientOf(int id) { return repo.findById(id).map(Notification::getRecipientId); }
+
     /**
      * publishNotificationEvent — serializes and publishes the notification to Redis pub/sub.
      * The published JSON includes all fields (including recipientId) so each websocket-service

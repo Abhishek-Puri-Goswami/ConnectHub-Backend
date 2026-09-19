@@ -59,6 +59,24 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
 
     @Value("${jwt.secret}") private String jwtSecret;
 
+    /** Used to reject revoked tokens (logout, revoke-all, suspension). Optional so the class stays unit-testable. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.data.redis.core.StringRedisTemplate redis;
+
+    /**
+     * Same revocation rules as the api-gateway: blacklisted jti, suspended user, or a token issued
+     * before the user's last invalidation (password reset / revoke-all).
+     */
+    private boolean isRevoked(Claims claims) {
+        if (redis == null) return false;
+        String userId = claims.getSubject();
+        String jti = claims.get("jti", String.class);
+        if (jti != null && !jti.isBlank() && Boolean.TRUE.equals(redis.hasKey("token:blacklist:" + jti))) return true;
+        if (Boolean.TRUE.equals(redis.hasKey("user:suspended:" + userId))) return true;
+        long iat = claims.getIssuedAt() != null ? claims.getIssuedAt().getTime() / 1000 : 0L;
+        return TokenInvalidation.isInvalidated(iat, redis.opsForValue().get("user:invalidated:" + userId));
+    }
+
     /**
      * preSend — intercepts inbound STOMP frames before they reach the message broker.
      *
@@ -80,6 +98,7 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
                 try {
                     SecretKey key = Keys.hmacShaKeyFor(Base64.getDecoder().decode(jwtSecret));
                     Claims claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(auth.substring(7)).getPayload();
+                    if (isRevoked(claims)) throw new IllegalStateException("Token revoked");
                     String userId = claims.getSubject();
                     String username = claims.get("username", String.class);
                     String subscriptionTier = claims.get("subscriptionTier", String.class);

@@ -3,6 +3,7 @@ import com.connecthub.message.config.SubscriptionTierLimits;
 import com.connecthub.message.dto.MessagePreviewDto;
 import com.connecthub.message.entity.*;
 import com.connecthub.message.exception.BadRequestException;
+import com.connecthub.message.exception.ResourceNotFoundException;
 import com.connecthub.message.exception.TooManyRequestsException;
 import com.connecthub.message.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -132,6 +133,19 @@ public class MessageService {
      * Used by other services (e.g., when validating replyToMessageId references).
      * Returns false for null or blank IDs defensively.
      */
+    /** Room that owns a message — used to authorize message-level operations. */
+    @Transactional(readOnly = true)
+    public String roomIdOf(String messageId) {
+        return msgRepo.findById(messageId).map(Message::getRoomId)
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found"));
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> senderInfo(String messageId) {
+        Message m = msgRepo.findById(messageId).orElseThrow(() -> new ResourceNotFoundException("Message not found"));
+        return java.util.Map.of("senderId", m.getSenderId(), "roomId", m.getRoomId());
+    }
+
     @Transactional(readOnly = true)
     public boolean existsById(String messageId) {
         if (messageId == null || messageId.isBlank()) return false;

@@ -18,6 +18,7 @@ import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class JwtChannelInterceptorTest {
 
@@ -95,6 +96,28 @@ class JwtChannelInterceptorTest {
 
         assertEquals("1", principal.getName());
         assertEquals("FREE", principal.subscriptionTier());
+    }
+
+    @Test
+    void preSend_connectWithRevokedToken_isRejected() {
+        var redis = mock(org.springframework.data.redis.core.StringRedisTemplate.class);
+        @SuppressWarnings("unchecked")
+        var ops = (org.springframework.data.redis.core.ValueOperations<String, String>) mock(org.springframework.data.redis.core.ValueOperations.class);
+        when(redis.opsForValue()).thenReturn(ops);
+        ReflectionTestUtils.setField(interceptor, "redis", redis);
+        String tok = token("7", "alice", "FREE");
+
+        // user invalidated (e.g. password reset) after this token was issued
+        when(ops.get("user:invalidated:7")).thenReturn(String.valueOf(System.currentTimeMillis() + 60_000));
+        assertThrows(RuntimeException.class, () -> interceptor.preSend(connectMessage("Bearer " + tok), channel));
+
+        // invalidation older than the token -> fine
+        when(ops.get("user:invalidated:7")).thenReturn(String.valueOf(System.currentTimeMillis() - 3_600_000));
+        assertDoesNotThrow(() -> interceptor.preSend(connectMessage("Bearer " + tok), channel));
+
+        // suspended user -> rejected
+        when(redis.hasKey("user:suspended:7")).thenReturn(true);
+        assertThrows(RuntimeException.class, () -> interceptor.preSend(connectMessage("Bearer " + tok), channel));
     }
 
     private Message<byte[]> connectMessage(String authorizationHeader) {

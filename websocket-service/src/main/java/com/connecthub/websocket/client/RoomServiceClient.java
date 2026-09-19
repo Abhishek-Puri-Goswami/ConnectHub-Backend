@@ -32,4 +32,7 @@ public interface RoomServiceClient {
 
     @DeleteMapping("/api/v1/rooms/{roomId}/pin")
     void unpinMessage(@PathVariable("roomId") String roomId, @RequestHeader("X-User-Id") String userId);
+
+    @GetMapping("/api/v1/rooms/{roomId}/members/{userId}/check")
+    Boolean isMember(@PathVariable("roomId") String roomId, @PathVariable("userId") int userId);
 }

@@ -6,6 +6,7 @@ import com.connecthub.websocket.config.RedisConfig;
 import com.connecthub.websocket.dto.*;
 import com.connecthub.websocket.service.DeliveryService;
 import com.connecthub.websocket.service.MessagePersistenceService;
+import com.connecthub.websocket.service.RoomAccessService;
 import com.connecthub.websocket.service.TypingService;
 import com.connecthub.websocket.service.UnreadCountService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -87,6 +88,7 @@ public class ChatWebSocketHandler {
     private final TypingService typingService;
     private final DeliveryService deliveryService;
     private final UnreadCountService unreadCountService;
+    private final RoomAccessService roomAccess;
 
     /**
      * handleChat — processes an incoming chat message from a connected client.
@@ -121,6 +123,10 @@ public class ChatWebSocketHandler {
              * Populate server-authoritative fields from the authenticated session.
              * The client cannot spoof these — they come from the JWT claim.
              */
+            if (!roomAccess.isMember(p.getRoomId(), Integer.parseInt(uid))) {
+                log.warn("Chat send denied: user {} is not a member of room {}", uid, p.getRoomId());
+                return;
+            }
             p.setSenderId(Integer.parseInt(uid));
             p.setSenderUsername(username);
             p.setSubscriptionTier(subscriptionTier != null && !subscriptionTier.isBlank() ? subscriptionTier : "FREE");
@@ -208,6 +214,7 @@ public class ChatWebSocketHandler {
     public void handleTyping(@Payload TypingIndicatorPayload p, SimpMessageHeaderAccessor h) {
         if (h.getUser() == null) return;
         int senderId = Integer.parseInt(h.getUser().getName());
+        if (!roomAccess.isMember(p.getRoomId(), senderId)) return;
         p.setSenderId(senderId);
         if (h.getUser() instanceof com.connecthub.websocket.interceptor.JwtChannelInterceptor.StompPrincipal sp) {
             p.setSenderUsername(sp.username());
@@ -226,6 +233,7 @@ public class ChatWebSocketHandler {
         try {
             if (h.getUser() == null) return;
             String uid = h.getUser().getName();
+            if (!roomAccess.isMember(p.getRoomId(), Integer.parseInt(uid))) return;
             p.setReaderId(Integer.parseInt(uid));
             // Route through Redis pub/sub so all pods broadcast to /topic/room/{roomId}/read.
             // A direct STOMP broadcast would only reach clients on this pod, so the sender
@@ -247,7 +255,9 @@ public class ChatWebSocketHandler {
     public void handleReaction(@Payload ReactionPayload p, SimpMessageHeaderAccessor h) {
         try {
             if (h.getUser() == null) return;
-            p.setSenderId(Integer.parseInt(h.getUser().getName()));
+            int uid = Integer.parseInt(h.getUser().getName());
+            if (!roomAccess.isMember(p.getRoomId(), uid)) return;
+            p.setSenderId(uid);
             String json = mapper.writeValueAsString(p);
             redis.convertAndSend(RedisConfig.REACTION_CHANNEL, json);
         } catch (Exception e) {
@@ -264,7 +274,14 @@ public class ChatWebSocketHandler {
     public void handleEdit(@Payload MessageEditPayload p, SimpMessageHeaderAccessor h) {
         try {
             if (h.getUser() == null) return;
-            p.setEditorId(Integer.parseInt(h.getUser().getName()));
+            int uid = Integer.parseInt(h.getUser().getName());
+            // The REST edit already enforces authorship; verify it here too so a member cannot forge
+            // an "edited" event for someone else's message.
+            if (!roomAccess.isMember(p.getRoomId(), uid) || !roomAccess.isAuthor(p.getMessageId(), p.getRoomId(), uid)) {
+                log.warn("Edit event denied for user {} on message {}", uid, p.getMessageId());
+                return;
+            }
+            p.setEditorId(uid);
             if (p.getNewContent() != null) p.setNewContent(HtmlUtils.htmlEscape(p.getNewContent()));
             String json = mapper.writeValueAsString(p);
             redis.convertAndSend(RedisConfig.EDIT_CHANNEL, json);
@@ -282,7 +299,12 @@ public class ChatWebSocketHandler {
     public void handleDelete(@Payload MessageDeletePayload p, SimpMessageHeaderAccessor h) {
         try {
             if (h.getUser() == null) return;
-            p.setDeleterId(Integer.parseInt(h.getUser().getName()));
+            int uid = Integer.parseInt(h.getUser().getName());
+            if (!roomAccess.isMember(p.getRoomId(), uid) || !roomAccess.isAuthor(p.getMessageId(), p.getRoomId(), uid)) {
+                log.warn("Delete event denied for user {} on message {}", uid, p.getMessageId());
+                return;
+            }
+            p.setDeleterId(uid);
             String json = mapper.writeValueAsString(p);
             redis.convertAndSend(RedisConfig.DELETE_CHANNEL, json);
         } catch (Exception e) {
@@ -300,6 +322,7 @@ public class ChatWebSocketHandler {
         try {
             if (h.getUser() == null) return;
             String uid = h.getUser().getName();
+            if (!roomAccess.isMember(p.getRoomId(), Integer.parseInt(uid))) return;
             p.setPinnedBy(Integer.parseInt(uid));
             p.setTimestamp(System.currentTimeMillis());
             roomServiceClient.pinMessage(p.getRoomId(), p.getMessageId(), uid);
@@ -319,6 +342,7 @@ public class ChatWebSocketHandler {
         try {
             if (h.getUser() == null) return;
             String uid = h.getUser().getName();
+            if (!roomAccess.isMember(p.getRoomId(), Integer.parseInt(uid))) return;
             p.setPinnedBy(Integer.parseInt(uid));
             p.setTimestamp(System.currentTimeMillis());
             p.setMessageId(null);
