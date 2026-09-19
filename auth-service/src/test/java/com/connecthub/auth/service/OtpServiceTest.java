@@ -56,7 +56,6 @@ class OtpServiceTest {
 
     @Test
     void verify_correctOtp_returnsTrue() {
-        when(valueOps.get("otp:attempts:register:a@b.com")).thenReturn(null);
         when(valueOps.increment("otp:attempts:register:a@b.com")).thenReturn(1L);
         when(valueOps.get("otp:register:a@b.com")).thenReturn("123456");
         assertTrue(otpService.verify("register", "a@b.com", "123456"));
@@ -64,7 +63,6 @@ class OtpServiceTest {
 
     @Test
     void verify_wrongOtp_returnsFalse() {
-        when(valueOps.get("otp:attempts:register:a@b.com")).thenReturn(null);
         when(valueOps.increment("otp:attempts:register:a@b.com")).thenReturn(1L);
         when(valueOps.get("otp:register:a@b.com")).thenReturn("123456");
         assertFalse(otpService.verify("register", "a@b.com", "000000"));
@@ -72,22 +70,41 @@ class OtpServiceTest {
 
     @Test
     void verify_expiredOtp_returnsFalse() {
-        when(valueOps.get("otp:attempts:register:a@b.com")).thenReturn(null);
         when(valueOps.increment("otp:attempts:register:a@b.com")).thenReturn(1L);
         when(valueOps.get("otp:register:a@b.com")).thenReturn(null); // expired / not found
         assertFalse(otpService.verify("register", "a@b.com", "123456"));
     }
 
     @Test
-    void verify_maxAttemptsExceeded_returnsFalse() {
-        when(valueOps.get("otp:attempts:register:a@b.com")).thenReturn("5");
+    void verify_maxAttemptsExceeded_returnsFalse_evenForTheCorrectCode() {
+        when(valueOps.increment("otp:attempts:register:a@b.com")).thenReturn(6L); // 6th attempt, limit is 5
         assertFalse(otpService.verify("register", "a@b.com", "123456"));
         verify(valueOps, never()).get("otp:register:a@b.com");
     }
 
     @Test
+    void verify_fifthAttemptIsStillAllowed() {
+        when(valueOps.increment("otp:attempts:register:a@b.com")).thenReturn(5L);
+        when(valueOps.get("otp:register:a@b.com")).thenReturn("123456");
+        assertTrue(otpService.verify("register", "a@b.com", "123456"));
+    }
+
+    @Test
+    void verify_countsAtomicallyBeforeChecking_soParallelGuessesCannotShareOneBudget() throws Exception {
+        // 50 parallel guesses through a real atomic counter: exactly 5 may reach the code comparison.
+        java.util.concurrent.atomic.AtomicLong counter = new java.util.concurrent.atomic.AtomicLong();
+        when(valueOps.increment("otp:attempts:register:a@b.com")).thenAnswer(inv -> counter.incrementAndGet());
+        when(valueOps.get("otp:register:a@b.com")).thenReturn("123456");
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(16);
+        java.util.List<java.util.concurrent.Future<Boolean>> results = new java.util.ArrayList<>();
+        for (int i = 0; i < 50; i++) results.add(pool.submit(() -> otpService.verify("register", "a@b.com", "000000")));
+        for (java.util.concurrent.Future<Boolean> f : results) f.get();
+        pool.shutdown();
+        verify(valueOps, times(5)).get("otp:register:a@b.com");
+    }
+
+    @Test
     void verify_correctOtp_deletesStoredOtp() {
-        when(valueOps.get("otp:attempts:register:a@b.com")).thenReturn(null);
         when(valueOps.increment("otp:attempts:register:a@b.com")).thenReturn(1L);
         when(valueOps.get("otp:register:a@b.com")).thenReturn("111222");
 

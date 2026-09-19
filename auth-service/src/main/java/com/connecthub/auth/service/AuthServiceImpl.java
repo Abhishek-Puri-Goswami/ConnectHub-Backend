@@ -62,6 +62,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtUtil jwtUtil;
     private final OtpService otpService;
     private final StringRedisTemplate redis;
+    private final LoginAttemptService loginAttempts;
     private final EmailEventPublisher emailPublisher;
     private final UserProfileCacheService profileCache;
     private final KafkaTemplate<String, Object> kafkaTemplate;
@@ -210,8 +211,17 @@ public class AuthServiceImpl implements AuthService {
         if (user == null && req.getUsername() != null && !req.getUsername().isBlank()) {
             user = userRepository.findByUsername(req.getUsername()).orElse(null);
         }
-        if (user == null)
+        // Brute-force protection: unknown identifiers share the same throttle as real accounts (no enumeration)
+        String identifier = req.getEmail() != null && !req.getEmail().isBlank() ? req.getEmail() : req.getUsername();
+        String accountKey = user != null
+                ? LoginAttemptService.userAccountKey(user.getUserId())
+                : LoginAttemptService.unknownAccountKey(identifier);
+        loginAttempts.assertAccountAllowed(accountKey);
+
+        if (user == null) {
+            loginAttempts.recordAccountFailure(accountKey);
             throw new UnauthorizedException("Invalid credentials");
+        }
 
         if (!user.isActive())
             throw new UnauthorizedException("Account is suspended");
@@ -220,8 +230,11 @@ public class AuthServiceImpl implements AuthService {
         if (!user.isEmailVerified())
             throw new UnauthorizedException("Email not verified. Please verify your email first.");
 
-        if (req.getPassword() == null || !passwordEncoder.matches(req.getPassword(), user.getPasswordHash()))
+        if (req.getPassword() == null || !passwordEncoder.matches(req.getPassword(), user.getPasswordHash())) {
+            loginAttempts.recordAccountFailure(accountKey);
             throw new UnauthorizedException("Invalid credentials");
+        }
+        loginAttempts.clearAccount(accountKey);
 
         log.info("User logged in (password): {}", user.getUsername());
         return buildAuthResponse(user);
@@ -528,8 +541,13 @@ public class AuthServiceImpl implements AuthService {
         User user = getUserById(userId);
         if (!"LOCAL".equals(user.getProvider()))
             throw new BadRequestException("OAuth users cannot change password");
-        if (!passwordEncoder.matches(req.getCurrentPassword(), user.getPasswordHash()))
+        String pwKey = "pw:" + LoginAttemptService.userAccountKey(userId);
+        loginAttempts.assertAccountAllowed(pwKey);
+        if (!passwordEncoder.matches(req.getCurrentPassword(), user.getPasswordHash())) {
+            loginAttempts.recordAccountFailure(pwKey);
             throw new UnauthorizedException("Current password is incorrect");
+        }
+        loginAttempts.clearAccount(pwKey);
         user.setPasswordHash(passwordEncoder.encode(req.getNewPassword()));
         userRepository.save(user);
     }
@@ -619,9 +637,13 @@ public class AuthServiceImpl implements AuthService {
             if (password == null || password.isBlank()) {
                 throw new BadRequestException("Password confirmation is required to delete your account");
             }
+            String pwKey = "pw:" + LoginAttemptService.userAccountKey(userId);
+            loginAttempts.assertAccountAllowed(pwKey);
             if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+                loginAttempts.recordAccountFailure(pwKey);
                 throw new ForbiddenException("Incorrect password");
             }
+            loginAttempts.clearAccount(pwKey);
         }
         // Invalidate existing tokens so they are rejected immediately after deletion
         redis.opsForValue().set("user:invalidated:" + userId, String.valueOf(System.currentTimeMillis()),

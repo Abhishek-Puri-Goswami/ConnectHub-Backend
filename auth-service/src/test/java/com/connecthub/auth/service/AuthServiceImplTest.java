@@ -37,6 +37,8 @@ class AuthServiceImplTest {
     @Mock
     private ValueOperations<String, String> valueOps;
     @Mock
+    private LoginAttemptService loginAttempts;
+    @Mock
     private EmailEventPublisher emailPublisher;
     @Mock
     private UserProfileCacheService profileCache;
@@ -244,6 +246,49 @@ class AuthServiceImplTest {
         req.setPassword("any");
         when(userRepository.findByEmail("ghost@test.com")).thenReturn(Optional.empty());
         assertThrows(UnauthorizedException.class, () -> authService.login(req));
+    }
+
+    // ── login brute-force protection ─────────────────────────────────────────
+
+    @Test
+    void login_wrongPassword_recordsFailureAgainstTheAccount() {
+        LoginRequest req = new LoginRequest();
+        req.setEmail("test@example.com");
+        req.setPassword("wrong");
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("wrong", testUser.getPasswordHash())).thenReturn(false);
+
+        assertThrows(UnauthorizedException.class, () -> authService.login(req));
+
+        verify(loginAttempts).recordAccountFailure(LoginAttemptService.userAccountKey(testUser.getUserId()));
+        verify(loginAttempts, never()).clearAccount(any());
+    }
+
+    @Test
+    void login_lockedAccount_isRefusedBeforeAnyPasswordCheck() {
+        LoginRequest req = new LoginRequest();
+        req.setEmail("test@example.com");
+        req.setPassword("Whatever1!");
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        doThrow(new TooManyRequestsException("locked", 900)).when(loginAttempts).assertAccountAllowed(any());
+
+        assertThrows(TooManyRequestsException.class, () -> authService.login(req));
+
+        verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void login_unknownUser_isThrottledUnderTheTypedIdentifier() {
+        LoginRequest req = new LoginRequest();
+        req.setEmail("Nobody@Example.com");
+        req.setPassword("x");
+        when(userRepository.findByEmail("Nobody@Example.com")).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("Nobody@Example.com")).thenReturn(Optional.empty());
+
+        assertThrows(UnauthorizedException.class, () -> authService.login(req));
+
+        verify(loginAttempts).assertAccountAllowed("n:nobody@example.com");
+        verify(loginAttempts).recordAccountFailure("n:nobody@example.com");
     }
 
     // ── logout ───────────────────────────────────────────────────────────────

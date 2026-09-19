@@ -161,10 +161,16 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
          * BEFORE any other processing. This prevents external clients from injecting
          * headers like X-User-Id that downstream services would blindly trust.
          */
+        // The client address as this gateway sees it. A client-supplied X-Forwarded-For would otherwise be trusted
+        // by downstream per-IP rate limits (they read its first entry), letting an attacker dodge them by lying.
+        java.net.InetSocketAddress remote = exchange.getRequest().getRemoteAddress();
+        final String clientIp = remote != null && remote.getAddress() != null ? remote.getAddress().getHostAddress() : null;
         ServerHttpRequest strippedRequest = exchange.getRequest().mutate()
                 .headers(h -> {
                     INTERNAL_HEADERS.forEach(h::remove);
                     h.set("X-Internal-Auth", internalSecret);
+                    if (clientIp != null) h.set("X-Forwarded-For", clientIp);
+                    else h.remove("X-Forwarded-For");
                 })
                 .build();
         exchange = exchange.mutate().request(strippedRequest).build();

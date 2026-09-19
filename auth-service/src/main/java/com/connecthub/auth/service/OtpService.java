@@ -109,21 +109,15 @@ public class OtpService {
      */
     public boolean verify(String purpose, String email, String otp) {
         String attemptsKey = ATTEMPTS_PREFIX + purpose + ":" + email;
-        String countStr = redis.opsForValue().get(attemptsKey);
-        int attempts = countStr != null ? Integer.parseInt(countStr) : 0;
 
-        if (attempts >= MAX_ATTEMPTS) {
+        // Count first, atomically: reading the counter and incrementing it as two steps let parallel guesses
+        // all see "0 attempts" and get far more than MAX_ATTEMPTS tries.
+        Long attempts = redis.opsForValue().increment(attemptsKey);
+        redis.expire(attemptsKey, 10, TimeUnit.MINUTES);
+        if (attempts != null && attempts > MAX_ATTEMPTS) {
             log.warn("OTP max attempts exceeded for {}:{}", purpose, maskEmail(email));
             return false;
         }
-
-        /*
-         * Increment BEFORE checking so every submission costs an attempt.
-         * The 10-minute TTL on the attempts counter prevents it from lingering
-         * indefinitely if the user never retries.
-         */
-        redis.opsForValue().increment(attemptsKey);
-        redis.expire(attemptsKey, 10, TimeUnit.MINUTES);
 
         String key = OTP_PREFIX + purpose + ":" + email;
         String stored = redis.opsForValue().get(key);

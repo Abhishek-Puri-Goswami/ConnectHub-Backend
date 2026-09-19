@@ -82,6 +82,11 @@ public class IpRateLimiter {
      * extractClientIp — reads the client IP from X-Forwarded-For (set by the gateway)
      * falling back to the remote address from the servlet request.
      */
+    /** The caller's address as set by the gateway (which overwrites any client-supplied X-Forwarded-For). */
+    public String clientIp(HttpServletRequest request) {
+        return extractClientIp(request);
+    }
+
     private String extractClientIp(HttpServletRequest request) {
         String xff = request.getHeader("X-Forwarded-For");
         if (xff != null && !xff.isBlank()) {

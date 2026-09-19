@@ -199,6 +199,17 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void filter_overwritesClientSuppliedXForwardedFor_withTheRealAddress() throws Exception {
+        // downstream per-IP rate limits read the first X-Forwarded-For entry: a client must not be able to choose it
+        MockServerWebExchange spoofed = MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/auth/login")
+                .remoteAddress(new java.net.InetSocketAddress(java.net.InetAddress.getByAddress(new byte[]{(byte) 203, 0, 113, 9}), 5555))
+                .header("X-Forwarded-For", "1.2.3.4, 5.6.7.8").build());
+        filter.filter(spoofed, chain).block();
+        verify(chain).filter(argThat(e -> java.util.List.of("203.0.113.9")
+                .equals(e.getRequest().getHeaders().get("X-Forwarded-For"))));
+    }
+
+    @Test
     void filter_invalidToken_returns401() {
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/users/profile")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer invalid-token.abcd.efgh")

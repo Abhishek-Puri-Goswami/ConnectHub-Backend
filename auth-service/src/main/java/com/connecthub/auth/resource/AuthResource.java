@@ -3,6 +3,7 @@ package com.connecthub.auth.resource;
 import com.connecthub.auth.config.IpRateLimiter;
 import com.connecthub.auth.dto.*;
 import com.connecthub.auth.entity.User;
+import com.connecthub.auth.exception.UnauthorizedException;
 import com.connecthub.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,6 +30,7 @@ public class AuthResource {
 
     private final AuthService authService;
     private final IpRateLimiter ipRateLimiter;
+    private final com.connecthub.auth.service.LoginAttemptService loginAttempts;
     private final StringRedisTemplate redis;
 
     // ─── Registration ─────────────────────────────────────────────────
@@ -74,8 +76,15 @@ public class AuthResource {
 
     @PostMapping("/login")
     @Operation(summary = "Login with email/username + password")
-    public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+    public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request, HttpServletRequest httpReq) {
+        String ip = ipRateLimiter.clientIp(httpReq);
+        loginAttempts.assertIpAllowed(ip); // password spraying across many accounts from one address
+        try {
+            return ResponseEntity.ok(authService.login(request));
+        } catch (UnauthorizedException e) {
+            loginAttempts.recordIpFailure(ip);
+            throw e;
+        }
     }
 
     // ─── Login: Email + OTP ──────────────────────────────────────────

@@ -245,7 +245,19 @@ scratch e2e scripts into a committed regression suite).
   `/users/batch` show any signed-in user another user's email and phone number (the DM info panel displays them).
   Also note plain `ADMIN` can change another user's profile/password endpoints (`updateProfile`/`changePassword`
   accept ADMIN as well as self) — decide whether that should be PLATFORM_ADMIN only.
-- **Phase 3 remaining**: #15, #16. **Phase 4**: #11 (billing UI still advertises
+- **#15 brute-force protection — DONE**: password login had no throttling at all (12 wrong passwords in a row went
+  through). New `LoginAttemptService` (Redis, TTL-based so locks expire on their own): 5 wrong passwords lock that account's
+  password login for 15 min (429 + `Retry-After`, even the correct password is refused while locked); the counter is keyed
+  by user id when the account exists and by the normalised typed identifier otherwise, so unknown names behave identically
+  (no enumeration) and email/username variants share one lock; a correct password clears it. Per client IP: 30 failures /
+  15 min blocks password spraying. The same limiter guards the current-password check in change-password and the
+  password confirmation in delete-account (separate counter). Email-OTP login and password reset are NOT locked, so a
+  locked-out owner is never stuck. Trade-off accepted: someone who knows a username can lock that account's password
+  login for 15 min. Also fixed: OTP verify counted attempts as get-then-increment, so parallel guesses shared one budget
+  (now an atomic increment first; 30 parallel guesses are all counted), and the gateway now overwrites the client's
+  `X-Forwarded-For` with the real remote address — the existing per-IP limits (forgot-password, OTP) trusted its first
+  entry, so they could be dodged by lying. Live-verified (19 checks incl. lock expiry and rotating fake XFF).
+- **Phase 3 remaining**: #16. **Phase 4**: #11 (billing UI still advertises
   the old limits), #12, #14. **Phase 5**: P2 hygiene #17–#22.
 
 ## Not yet done

@@ -36,6 +36,9 @@ class AuthResourceTest {
     @Mock
     private StringRedisTemplate redis;
 
+    @Mock
+    private com.connecthub.auth.service.LoginAttemptService loginAttempts;
+
     @InjectMocks
     private AuthResource authResource;
 
@@ -104,7 +107,7 @@ class AuthResourceTest {
     void login() {
         LoginRequest req = new LoginRequest();
         when(authService.login(req)).thenReturn(dummyAuth());
-        assertEquals(HttpStatus.OK, authResource.login(req).getStatusCode());
+        assertEquals(HttpStatus.OK, authResource.login(req, mock(jakarta.servlet.http.HttpServletRequest.class)).getStatusCode());
     }
 
     @Test
