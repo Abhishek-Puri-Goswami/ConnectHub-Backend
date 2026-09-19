@@ -47,6 +47,7 @@ class JwtAuthenticationFilterTest {
 
         filter = new JwtAuthenticationFilter(redisTemplate);
         ReflectionTestUtils.setField(filter, "jwtSecret", rawSecret);
+        ReflectionTestUtils.setField(filter, "internalSecret", "gw-internal-secret");
         chain = mock(GatewayFilterChain.class);
         when(chain.filter(any(ServerWebExchange.class))).thenReturn(Mono.empty());
     }
@@ -169,6 +170,32 @@ class JwtAuthenticationFilterTest {
                 .header("X-Internal-Service", "websocket-service").build());
         filter.filter(ex, chain).block();
         verify(chain).filter(argThat(e -> e.getRequest().getHeaders().getFirst("X-Internal-Service") == null));
+    }
+
+    @Test
+    void filter_addsInternalSecretOnEveryRoutedRequest_overridingAnyClientValue() {
+        // authenticated route, with a forged client-supplied secret
+        String token = generateToken("123", "USER", "FREE");
+        MockServerWebExchange authed = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/users/profile")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header("X-Internal-Auth", "forged-by-client").build());
+        filter.filter(authed, chain).block();
+        verify(chain).filter(argThat(e -> java.util.List.of("gw-internal-secret")
+                .equals(e.getRequest().getHeaders().get("X-Internal-Auth"))));
+
+        // public shortcut route (no JWT) must carry it too, and never the client's value
+        MockServerWebExchange open = MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/auth/login")
+                .header("X-Internal-Auth", "forged-by-client").build());
+        filter.filter(open, chain).block();
+        verify(chain, times(2)).filter(argThat(e -> java.util.List.of("gw-internal-secret")
+                .equals(e.getRequest().getHeaders().get("X-Internal-Auth"))));
+    }
+
+    @Test
+    void filter_failsFastWithoutInternalSecret() {
+        JwtAuthenticationFilter bare = new JwtAuthenticationFilter(mock(ReactiveStringRedisTemplate.class));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> ReflectionTestUtils.invokeMethod(bare, "requireInternalSecret"));
     }
 
     @Test

@@ -222,7 +222,21 @@ scratch e2e scripts into a committed regression suite).
   a non-author = 403, unknown message = 404, duplicate reaction = 409 (`ConflictException`), account-delete
   wrong password = 403 / missing = 400. Empty-body login stays 401 on purpose. Live-verified (44 cases).
 - **Phase 2 done.**
-- **Phase 3**: #9, #10, #15, #16. **Phase 4**: #11 (billing UI still advertises
+- **#9 internal service exposure — DONE**: verified from a non-loopback address that every service port was
+  reachable unauthenticated: spoofed `X-User-*` headers listed all users (incl. password hashes), `POST /actuator/loggers`
+  changed log levels, metrics/env were readable, and the Eureka registry accepted anonymous requests (a rogue
+  "auth-service" registration would have received real logins). Now: (1) every service and the gateway bind to
+  `127.0.0.1` (`BIND_ADDRESS`; Eureka instances register `EUREKA_INSTANCE_IP`=127.0.0.1; Kafka listeners too, see
+  SETUP.md); (2) the gateway sends `X-Internal-Auth` (= `INTERNAL_SERVICE_SECRET`, auto-generated into `.env` by
+  start-backend.ps1) on every routed request and strips any client-supplied one; Feign clients send it too;
+  (3) common-lib `InternalAuthFilter` hides all identity/internal headers (`X-User-*`, `X-Internal-*`) from any request
+  without the valid secret, so `X-Internal-Service` is now trustworthy; (4) sensitive actuator endpoints need the
+  secret (admin-server sends it via `HttpHeadersProvider`), health is status-only, gateway exposes health/info only;
+  (5) auth-service no longer `permitAll`s everything: public paths mirror the gateway list, `/admin/**` needs an admin
+  role header, the rest needs `X-User-Id`; (6) Eureka requires basic auth. Services refuse to start without the
+  secret. Live-verified. NOT covered: MySQL (native, all interfaces — bind it to localhost in my.ini yourself),
+  Zipkin :9411 (all interfaces, traces only), Swagger/API-docs are still public.
+- **Phase 3 remaining**: #10, #15, #16. **Phase 4**: #11 (billing UI still advertises
   the old limits), #12, #14. **Phase 5**: P2 hygiene #17–#22.
 
 ## Not yet done

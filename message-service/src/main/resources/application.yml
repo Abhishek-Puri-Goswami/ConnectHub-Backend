@@ -1,5 +1,8 @@
 server:
   port: 8083
+  # Loopback only: services are reached through the gateway on this machine. Set BIND_ADDRESS=0.0.0.0
+  # (and EUREKA_INSTANCE_IP to this machine's address) only if you deliberately serve other hosts.
+  address: ${BIND_ADDRESS:127.0.0.1}
 spring:
   data:
     redis:
@@ -31,6 +34,7 @@ eureka:
       defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka}@${EUREKA_HOST:localhost}:8761/eureka/
   instance:
     prefer-ip-address: true
+    ip-address: ${EUREKA_INSTANCE_IP:127.0.0.1}
     instance-id: ${spring.application.name}:${server.port}
 management:
   endpoints:
@@ -39,7 +43,7 @@ management:
         include: health,info,metrics,loggers,env
   endpoint:
     health:
-      show-details: always
+      show-details: never
   tracing:
     sampling:
       probability: 1.0

@@ -137,8 +137,22 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      */
     private static final List<String> INTERNAL_HEADERS = List.of(
             "X-User-Id", "X-User-Email", "X-User-Username", "X-User-Role", "X-Subscription-Tier",
-            "X-Internal-Service"
+            "X-Internal-Service", "X-Internal-Auth"
     );
+
+    /**
+     * Shared secret proving to downstream services that a request really came through this gateway
+     * (their InternalAuthFilter hides every identity header otherwise). Set on every routed request,
+     * after the client-supplied value has been stripped.
+     */
+    @Value("${connecthub.internal.secret:${INTERNAL_SERVICE_SECRET:}}")
+    private String internalSecret;
+
+    @jakarta.annotation.PostConstruct
+    void requireInternalSecret() {
+        if (internalSecret == null || internalSecret.isBlank())
+            throw new IllegalStateException("INTERNAL_SERVICE_SECRET is not set (add it to .env)");
+    }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -148,7 +162,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
          * headers like X-User-Id that downstream services would blindly trust.
          */
         ServerHttpRequest strippedRequest = exchange.getRequest().mutate()
-                .headers(h -> INTERNAL_HEADERS.forEach(h::remove))
+                .headers(h -> {
+                    INTERNAL_HEADERS.forEach(h::remove);
+                    h.set("X-Internal-Auth", internalSecret);
+                })
                 .build();
         exchange = exchange.mutate().request(strippedRequest).build();
 

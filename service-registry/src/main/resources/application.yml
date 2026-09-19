@@ -1,5 +1,8 @@
 server:
   port: 8761
+  # Loopback only: services are reached through the gateway on this machine. Set BIND_ADDRESS=0.0.0.0
+  # (and EUREKA_INSTANCE_IP to this machine's address) only if you deliberately serve other hosts.
+  address: ${BIND_ADDRESS:127.0.0.1}
 spring:
   application:
     name: service-registry
@@ -26,10 +29,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,loggers,env
+        include: health,info
   endpoint:
     health:
-      show-details: always
+      show-details: never
 
 
 

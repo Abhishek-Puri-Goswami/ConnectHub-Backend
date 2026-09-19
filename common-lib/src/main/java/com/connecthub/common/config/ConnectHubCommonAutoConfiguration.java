@@ -1,6 +1,7 @@
 package com.connecthub.common.config;
 
 import com.connecthub.common.aspect.ExceptionAspect;
+import com.connecthub.common.web.InternalAuthFilter;
 import com.connecthub.common.aspect.LoggingAspect;
 import com.connecthub.common.aspect.PerformanceAspect;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -49,6 +50,20 @@ public class ConnectHubCommonAutoConfiguration {
     public FilterRegistrationBean<TraceIdFilter> traceIdFilter() {
         FilterRegistrationBean<TraceIdFilter> reg = new FilterRegistrationBean<>(new TraceIdFilter());
         reg.setOrder(1);
+        reg.addUrlPatterns("/*");
+        return reg;
+    }
+
+    /**
+     * Trust boundary between the api-gateway and services (see InternalAuthFilter). Runs before Spring
+     * Security (order -100) so identity headers are never seen by anything unless the shared secret matches.
+     */
+    @Bean
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+    public FilterRegistrationBean<InternalAuthFilter> internalAuthFilter(
+            @org.springframework.beans.factory.annotation.Value("${connecthub.internal.secret:${INTERNAL_SERVICE_SECRET:}}") String secret) {
+        FilterRegistrationBean<InternalAuthFilter> reg = new FilterRegistrationBean<>(new InternalAuthFilter(secret));
+        reg.setOrder(-150);
         reg.addUrlPatterns("/*");
         return reg;
     }

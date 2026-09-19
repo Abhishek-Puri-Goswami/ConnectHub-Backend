@@ -94,6 +94,17 @@ waits for every service's health check, and fails fast — with a
 `STARTUP FAILED` message and non-zero exit — if any component (Kafka
 included) doesn't come up.
 
+### Keep everything on this machine (recommended)
+
+Every ConnectHub service binds to `127.0.0.1` by default (`BIND_ADDRESS`), so only this machine can reach
+them — the browser talks to the gateway on `localhost:8080`. Do the same for Kafka in
+`config\kraft\server.properties`:
+```properties
+listeners=PLAINTEXT://127.0.0.1:9092,CONTROLLER://127.0.0.1:9093
+```
+Services also share an `INTERNAL_SERVICE_SECRET` (in `.env`; `start-backend.ps1` generates and saves one if it
+is blank). Without it a service ignores identity headers, so nothing but the gateway can act as a user.
+
 ### Required Kafka settings on Windows
 
 Add these three lines to `config\kraft\server.properties` (Kafka crashes on
