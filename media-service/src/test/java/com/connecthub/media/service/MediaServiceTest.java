@@ -4,6 +4,7 @@ import com.connecthub.media.entity.MediaFile;
 import com.connecthub.media.exception.MediaPlanLimitException;
 import com.connecthub.media.exception.MediaStorageQuotaException;
 import com.connecthub.media.repository.MediaRepository;
+import com.connecthub.media.storage.StorageProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,12 +13,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
-import software.amazon.awssdk.services.s3.model.DeleteObjectResponse;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 
 import java.io.IOException;
 import java.util.List;
@@ -35,7 +30,7 @@ class MediaServiceTest {
     @Mock
     private MediaRepository repo;
     @Mock
-    private S3Client s3Client;
+    private StorageProvider storage;
     @Mock
     private MediaUploadRateLimiter uploadRateLimiter;
     @InjectMocks
@@ -43,8 +38,7 @@ class MediaServiceTest {
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(mediaService, "bucketName", "test-bucket");
-        ReflectionTestUtils.setField(mediaService, "region", "us-east-1");
+        ReflectionTestUtils.setField(mediaService, "publicBaseUrl", "http://localhost:8080");
     }
 
     // ── upload ──────────────────────────────────────────────────────────────
@@ -55,17 +49,15 @@ class MediaServiceTest {
                 "file", "doc.txt", "text/plain", "hello world".getBytes());
         when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
         when(repo.sumSizeKbByUploaderId(1)).thenReturn(0L);
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenReturn(PutObjectResponse.builder().build());
         MediaFile saved = MediaFile.builder().mediaId("abc")
-                .url("https://test-bucket.s3.us-east-1.amazonaws.com/files/uuid/doc.txt").build();
+                .url("http://localhost:8080/api/v1/media/file/abc").build();
         when(repo.save(any())).thenReturn(saved);
 
         MediaFile result = mediaService.upload(file, 1, "room1", "FREE");
 
         assertThat(result.getMediaId()).isEqualTo("abc");
-        verify(s3Client).putObject(any(PutObjectRequest.class), any(RequestBody.class));
-        verify(repo).save(any());
+        verify(storage).put(startsWith("files/"), any());
+        verify(repo, times(2)).save(any()); // insert, then set the id-derived URLs
     }
 
     @Test
@@ -75,14 +67,12 @@ class MediaServiceTest {
                 "file", "photo.jpg", "image/jpeg", "not-a-real-jpeg".getBytes());
         when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
         when(repo.sumSizeKbByUploaderId(1)).thenReturn(0L);
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenReturn(PutObjectResponse.builder().build());
         when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         MediaFile result = mediaService.upload(file, 1, "room1", "FREE");
 
         assertThat(result).isNotNull();
-        verify(s3Client, atLeastOnce()).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+        verify(storage, atLeastOnce()).put(startsWith("images/"), any());
     }
 
     @Test
@@ -122,8 +112,6 @@ class MediaServiceTest {
         MockMultipartFile file = new MockMultipartFile("file", "big.txt", "text/plain", eightMb);
         when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
         when(repo.sumSizeKbByUploaderId(1)).thenReturn(0L);
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenReturn(PutObjectResponse.builder().build());
         when(repo.save(any())).thenReturn(MediaFile.builder().mediaId("free-ok").build());
 
         assertDoesNotThrow(() -> mediaService.upload(file, 1, "room1", "FREE"));
@@ -136,8 +124,6 @@ class MediaServiceTest {
         MockMultipartFile file = new MockMultipartFile("file", "big.txt", "text/plain", twentyMb);
         when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
         when(repo.sumSizeKbByUploaderId(1)).thenReturn(0L);
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenReturn(PutObjectResponse.builder().build());
         when(repo.save(any())).thenReturn(MediaFile.builder().mediaId("premium-ok").build());
 
         assertDoesNotThrow(() -> mediaService.upload(file, 1, "room1", "PREMIUM"));
@@ -191,8 +177,6 @@ class MediaServiceTest {
                 "file", "my file (1).txt", "text/plain", "content".getBytes());
         when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
         when(repo.sumSizeKbByUploaderId(1)).thenReturn(0L);
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenReturn(PutObjectResponse.builder().build());
         when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         MediaFile result = mediaService.upload(file, 1, "room1", "FREE");
@@ -206,8 +190,6 @@ class MediaServiceTest {
         MockMultipartFile file = new MockMultipartFile("file", null, "text/plain", "content".getBytes());
         when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
         when(repo.sumSizeKbByUploaderId(1)).thenReturn(0L);
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenReturn(PutObjectResponse.builder().build());
         when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         MediaFile result = mediaService.upload(file, 1, "room1", "FREE");
@@ -215,26 +197,63 @@ class MediaServiceTest {
     }
 
     @Test
-    void upload_withCloudfrontDomain_returnsCloudFrontUrl() throws IOException {
-        ReflectionTestUtils.setField(mediaService, "cloudfrontDomain", "cdn.example.com");
-        MockMultipartFile file = new MockMultipartFile(
-                "file", "doc.txt", "text/plain", "hello".getBytes());
+    void upload_storesStableGatewayUrlDerivedFromMediaId() throws IOException {
+        MockMultipartFile file = new MockMultipartFile("file", "doc.txt", "text/plain", "hello".getBytes());
         when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
         when(repo.sumSizeKbByUploaderId(1)).thenReturn(0L);
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenReturn(PutObjectResponse.builder().build());
         when(repo.save(any())).thenAnswer(inv -> {
             MediaFile mf = inv.getArgument(0);
-            // URL built with CloudFront domain must start with https://cdn.example.com/
-            assertThat(mf.getUrl()).startsWith("https://cdn.example.com/");
+            if (mf.getMediaId() == null) mf.setMediaId("id-123");
             return mf;
         });
 
         MediaFile result = mediaService.upload(file, 1, "room1", "FREE");
 
-        assertThat(result).isNotNull();
-        // Reset field so it doesn't leak into other tests
-        ReflectionTestUtils.setField(mediaService, "cloudfrontDomain", "");
+        assertThat(result.getUrl()).isEqualTo("http://localhost:8080/api/v1/media/file/id-123");
+        assertThat(result.getThumbnailUrl()).isNull();
+    }
+
+    @Test
+    void upload_image_getsThumbnailUrl() throws Exception {
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(50, 50, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(img, "png", out);
+        MockMultipartFile file = new MockMultipartFile("file", "p.png", "image/png", out.toByteArray());
+        when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
+        when(repo.sumSizeKbByUploaderId(1)).thenReturn(0L);
+        when(repo.save(any())).thenAnswer(inv -> {
+            MediaFile mf = inv.getArgument(0);
+            if (mf.getMediaId() == null) mf.setMediaId("img-1");
+            return mf;
+        });
+
+        byte[] thumbHead = new byte[2];
+        doAnswer(inv -> {
+            if (((String) inv.getArgument(0)).contains("/thumb_")) {
+                try (java.io.InputStream in = java.nio.file.Files.newInputStream((java.nio.file.Path) inv.getArgument(1))) {
+                    in.read(thumbHead);
+                }
+            }
+            return null;
+        }).when(storage).put(anyString(), any());
+
+        MediaFile result = mediaService.upload(file, 1, "room1", "FREE");
+
+        assertThat(result.getThumbnailUrl()).isEqualTo("http://localhost:8080/api/v1/media/file/img-1/thumb");
+        verify(storage, times(2)).put(anyString(), any()); // original + thumbnail
+        assertThat(thumbHead[0]).isEqualTo((byte) 0xFF); // thumbnail bytes really are a JPEG (FF D8)
+        assertThat(thumbHead[1]).isEqualTo((byte) 0xD8);
+    }
+
+    @Test
+    void upload_storageFailure_propagatesAndSavesNothing() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "doc.txt", "text/plain", "hello".getBytes());
+        when(uploadRateLimiter.tryAcquire(any(), any())).thenReturn(true);
+        when(repo.sumSizeKbByUploaderId(1)).thenReturn(0L);
+        doThrow(new IOException("disk full")).when(storage).put(anyString(), any());
+
+        assertThrows(IOException.class, () -> mediaService.upload(file, 1, "room1", "FREE"));
+        verify(repo, never()).save(any());
     }
 
     // ── getById ─────────────────────────────────────────────────────────────
@@ -278,7 +297,7 @@ class MediaServiceTest {
     // ── delete ───────────────────────────────────────────────────────────────
 
     @Test
-    void delete_withThumbnail_deletesMainAndThumb() {
+    void delete_withThumbnail_deletesMainAndThumb() throws Exception {
         MediaFile mf = MediaFile.builder()
                 .mediaId("id1")
                 .filename("images/uuid/photo.jpg")
@@ -286,16 +305,16 @@ class MediaServiceTest {
                 .thumbnailUrl("https://bucket/images/uuid/thumb_photo.jpg")
                 .build();
         when(repo.findById("id1")).thenReturn(Optional.of(mf));
-        when(s3Client.deleteObject(any(DeleteObjectRequest.class))).thenReturn(DeleteObjectResponse.builder().build());
 
         mediaService.delete("id1");
 
-        verify(s3Client, times(2)).deleteObject(any(DeleteObjectRequest.class));
+        verify(storage).delete("images/uuid/photo.jpg");
+        verify(storage).delete("images/uuid/thumb_photo.jpg");
         verify(repo).delete(mf);
     }
 
     @Test
-    void delete_withoutThumbnail_deletesOnlyMain() {
+    void delete_withoutThumbnail_deletesOnlyMain() throws Exception {
         MediaFile mf = MediaFile.builder()
                 .mediaId("id1")
                 .filename("files/uuid/doc.pdf")
@@ -303,26 +322,25 @@ class MediaServiceTest {
                 .thumbnailUrl(null)
                 .build();
         when(repo.findById("id1")).thenReturn(Optional.of(mf));
-        when(s3Client.deleteObject(any(DeleteObjectRequest.class))).thenReturn(DeleteObjectResponse.builder().build());
 
         mediaService.delete("id1");
 
-        verify(s3Client, times(1)).deleteObject(any(DeleteObjectRequest.class));
+        verify(storage, times(1)).delete(anyString());
         verify(repo).delete(mf);
     }
 
     @Test
-    void delete_notFound_noOp() {
+    void delete_notFound_noOp() throws Exception {
         when(repo.findById("ghost")).thenReturn(Optional.empty());
 
         mediaService.delete("ghost");
 
-        verify(s3Client, never()).deleteObject(any(DeleteObjectRequest.class));
+        verify(storage, never()).delete(anyString());
         verify(repo, never()).delete(any());
     }
 
     @Test
-    void delete_s3Fails_stillDeletesFromDb() {
+    void delete_storageFails_stillDeletesFromDb() throws Exception {
         MediaFile mf = MediaFile.builder()
                 .mediaId("id1")
                 .filename("files/uuid/doc.pdf")
@@ -330,7 +348,7 @@ class MediaServiceTest {
                 .thumbnailUrl(null)
                 .build();
         when(repo.findById("id1")).thenReturn(Optional.of(mf));
-        when(s3Client.deleteObject(any(DeleteObjectRequest.class))).thenThrow(new RuntimeException("S3 error"));
+        doThrow(new IOException("locked")).when(storage).delete(anyString());
 
         mediaService.delete("id1");
 

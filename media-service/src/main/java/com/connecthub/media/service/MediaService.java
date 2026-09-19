@@ -7,6 +7,7 @@ import com.connecthub.media.exception.FileSizeLimitException;
 import com.connecthub.media.exception.MediaPlanLimitException;
 import com.connecthub.media.exception.MediaStorageQuotaException;
 import com.connecthub.media.repository.MediaRepository;
+import com.connecthub.media.storage.StorageProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.coobird.thumbnailator.Thumbnails;
@@ -14,10 +15,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -28,56 +25,31 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * MediaService — File Upload, Storage, and Retrieval via AWS S3
+ * MediaService — file upload, storage and retrieval (local disk via {@link StorageProvider})
  *
  * PURPOSE:
- *   Handles all media file operations for the chat: uploading images and documents
- *   to S3, generating image thumbnails, enforcing per-user storage quotas, and
- *   deleting files from both S3 and the database. The resulting S3 URL is stored
- *   in the message's mediaUrl field so the frontend can render inline images and
- *   downloadable file attachments.
+ *   Handles all media file operations for the chat: storing images and documents,
+ *   generating image thumbnails, enforcing per-user storage quotas, and deleting files
+ *   from both storage and the database. The stored URL ({@code <base>/api/v1/media/file/<id>})
+ *   goes into the message's mediaUrl field; fetching it is authorized by MediaResource
+ *   (room membership + a signed media-session cookie), so the URL itself is not a secret.
  *
  * UPLOAD FLOW (upload() method):
- *   1. RATE LIMIT: Check the per-minute upload rate limit for the user's tier via
- *      MediaUploadRateLimiter (Redis INCR counter). Reject with MediaPlanLimitException if exceeded.
- *   2. BASIC VALIDATION: Reject empty files and files exceeding the tier's per-file
- *      size cap (MediaTierLimits.maxFileSizeKb — 10MB FREE, 250MB paid).
- *   3. STORAGE QUOTA: Sum the user's existing stored KB from the DB and compare against
- *      their tier's total storage cap (MediaTierLimits). Reject with MediaStorageQuotaException
- *      if the upload would exceed their quota.
- *   4. CONTENT TYPE CHECK: Only allow files matching the ALLOWED MIME types set.
- *      Reject unknown or dangerous types (e.g., .exe, .sh).
- *   5. S3 UPLOAD: Write the file to a temp path, upload to S3 using the AWS SDK.
- *      S3 key format: "{images|files}/{uuid}/{sanitized-filename}". UUID ensures
- *      key uniqueness even for files with identical names.
- *   6. THUMBNAIL GENERATION: For image types, generate a 300x300 JPEG thumbnail using
- *      Thumbnailator and upload it to S3 alongside the original. Thumbnail failures
- *      are non-fatal — the upload proceeds without a thumbnail URL.
- *   7. PERSIST: Save a MediaFile row to MySQL with the S3 URL, thumbnail URL,
- *      original filename, MIME type, and size in KB.
- *   8. CLEANUP: Always delete the local temp files in the finally block, even on failure.
- *
- * S3 KEY STRUCTURE:
- *   - Main file:  "images/{uuid}/{filename}" or "files/{uuid}/{filename}"
- *   - Thumbnail:  "images/{uuid}/thumb_{filename}"
- *   The sub-directory (images vs files) is chosen based on MIME type — images go
- *   in "images/", everything else goes in "files/".
- *
- * STORAGE QUOTA:
- *   MediaTierLimits.storageCapKb() returns the cap in kilobytes for each tier.
- *   The running total is computed by repo.sumSizeKbByUploaderId(), which sums
- *   all sizeKb values for the uploader. Incoming file size is rounded up to at
- *   least 1 KB to prevent rounding exploits with tiny files.
+ *   1. RATE LIMIT per tier (MediaUploadRateLimiter). Reject with MediaPlanLimitException.
+ *   2. VALIDATION: empty file -> 400; per-file size cap of the tier (10MB FREE, 250MB paid) -> 413.
+ *   3. STORAGE QUOTA: user's stored KB + this file vs the tier cap -> MediaStorageQuotaException (413).
+ *   4. CONTENT TYPE: only the ALLOWED MIME types; anything else -> 400.
+ *   5. STORE: spool to a temp file, then StorageProvider.put("{images|videos|files}/{uuid}/{name}").
+ *   6. THUMBNAIL: for images, a 300x300 JPEG stored as "thumb_{name}" (failure is non-fatal).
+ *   7. PERSIST a MediaFile row (key in filename, public URLs derived from the generated id).
+ *   8. CLEANUP: temp files are always deleted.
  *
  * FILE SANITIZATION:
- *   The original filename has all non-alphanumeric characters (except . _ -)
- *   replaced with underscores before being used as the S3 key. This prevents
- *   path traversal attacks and special character issues in S3 object keys.
+ *   The original filename has everything except letters, digits, . _ - replaced by underscores,
+ *   and LocalDiskStorageProvider additionally refuses any key that resolves outside its root.
  *
  * DELETION:
- *   delete() removes both the main file and its thumbnail (if any) from S3 before
- *   deleting the database row. The thumbnail key is derived from the main key by
- *   inserting "thumb_" before the filename portion.
+ *   delete() removes the file and its thumbnail from storage, then the database row.
  */
 @SuppressWarnings("null")
 @Service
@@ -87,17 +59,12 @@ import java.util.UUID;
 public class MediaService {
 
     private final MediaRepository repo;
-    private final S3Client s3Client;
+    private final StorageProvider storage;
     private final MediaUploadRateLimiter uploadRateLimiter;
 
-    @Value("${aws.s3.bucket:connecthub-media-bucket}")
-    private String bucketName;
-
-    @Value("${aws.region:us-east-1}")
-    private String region;
-
-    @Value("${aws.cloudfront.domain:}")
-    private String cloudfrontDomain;
+    /** Origin under which the gateway serves files; stored URLs are {@code <base>/api/v1/media/file/<id>}. */
+    @Value("${media.public-base-url}")
+    private String publicBaseUrl;
 
     /*
      * Image MIME types that receive thumbnail generation.
@@ -169,49 +136,33 @@ public class MediaService {
                 ? file.getOriginalFilename().replaceAll("[^a-zA-Z0-9._-]", "_") : "file";
         String uuid = UUID.randomUUID().toString();
         String subDir = IMAGES.contains(contentType) ? "images" : VIDEOS.contains(contentType) ? "videos" : "files";
-        String s3Key = subDir + "/" + uuid + "/" + originalName;
+        String storageKey = subDir + "/" + uuid + "/" + originalName;
 
         /*
-         * Write to a temp file so we can pass a File reference to both the S3 SDK
-         * (which needs a seekable stream for upload) and Thumbnailator (which needs
-         * a file path for efficient image processing).
+         * Spool to a temp file first: Thumbnailator needs a file path, and the storage
+         * provider copies from it, so a failure halfway never leaves a partial object.
          */
         Path tempFile = Files.createTempFile("upload_", originalName); // NOSONAR java:S5443
         file.transferTo(tempFile.toFile());
 
         try {
-            s3Client.putObject(PutObjectRequest.builder()
-                            .bucket(bucketName)
-                            .key(s3Key)
-                            .contentType(contentType)
-                            .build(),
-                    RequestBody.fromFile(tempFile.toFile()));
-
-            String url = buildMediaUrl(s3Key);
+            storage.put(storageKey, tempFile);
 
             /*
              * Thumbnail generation: for images, create a 300x300 JPEG using Thumbnailator
-             * and upload it under the same UUID directory as "thumb_{filename}".
-             * Failures here are non-fatal — the upload proceeds with thumbnailUrl=null.
+             * and store it next to the original as "thumb_{filename}".
+             * Failures here are non-fatal — the upload proceeds without a thumbnail.
              */
-            String thumbnailUrl = null;
+            boolean hasThumbnail = false;
+            String thumbKey = null;
             if (IMAGES.contains(contentType)) {
                 Path tempThumb = null;
                 try {
-                    String thumbName = "thumb_" + originalName;
-                    String thumbKey = subDir + "/" + uuid + "/" + thumbName;
-                    tempThumb = Files.createTempFile("thumb_", thumbName); // NOSONAR java:S5443
-
+                    thumbKey = subDir + "/" + uuid + "/thumb_" + originalName;
+                    tempThumb = Files.createTempFile("thumb_", ".jpg"); // NOSONAR java:S5443
                     Thumbnails.of(tempFile.toFile()).size(300, 300).outputFormat("jpg").toFile(tempThumb.toFile());
-
-                    s3Client.putObject(PutObjectRequest.builder()
-                                    .bucket(bucketName)
-                                    .key(thumbKey)
-                                    .contentType("image/jpeg")
-                                    .build(),
-                            RequestBody.fromFile(tempThumb.toFile()));
-
-                    thumbnailUrl = buildMediaUrl(thumbKey);
+                    storage.put(thumbKey, tempThumb);
+                    hasThumbnail = true;
                 } catch (Exception e) {
                     log.warn("Thumbnail generation failed: {}", e.getMessage());
                 } finally {
@@ -219,16 +170,17 @@ public class MediaService {
                 }
             }
 
-            MediaFile media = MediaFile.builder()
+            MediaFile media = repo.save(MediaFile.builder()
                     .uploaderId(uploaderId).roomId(roomId)
-                    .filename(s3Key)
+                    .filename(storageKey)
                     .originalName(originalName)
-                    .url(url).thumbnailUrl(thumbnailUrl)
+                    .url("pending") // needs the generated id; set right below
                     .mimeType(contentType)
                     .sizeKb(file.getSize() / 1024)
-                    .build();
+                    .build());
+            applyUrls(media, hasThumbnail);
 
-            log.info("File uploaded to S3: {} ({} KB) by user {}", originalName, media.getSizeKb(), uploaderId);
+            log.info("File stored: {} ({} KB) by user {}", originalName, media.getSizeKb(), uploaderId);
             return repo.save(media);
 
         } finally {
@@ -241,7 +193,7 @@ public class MediaService {
     }
 
     /**
-     * uploadProfilePicture — uploads a user avatar image to S3 under the avatars/ prefix.
+     * uploadProfilePicture — stores a user avatar image under the avatars/ prefix.
      * No room membership check or storage quota applies — profile pictures are a fixed
      * user-level asset. Only image types are accepted (jpeg, png, gif, webp).
      */
@@ -255,20 +207,18 @@ public class MediaService {
         String originalName = file.getOriginalFilename() != null
                 ? file.getOriginalFilename().replaceAll("[^a-zA-Z0-9._-]", "_") : "avatar";
         String uuid = UUID.randomUUID().toString();
-        String s3Key = "avatars/" + uuid + "/" + originalName;
+        String storageKey = "avatars/" + uuid + "/" + originalName;
         Path tempFile = Files.createTempFile("avatar_", originalName); // NOSONAR java:S5443
         file.transferTo(tempFile.toFile());
         try {
-            s3Client.putObject(PutObjectRequest.builder()
-                            .bucket(bucketName).key(s3Key).contentType(contentType).build(),
-                    RequestBody.fromFile(tempFile.toFile()));
-            String url = buildMediaUrl(s3Key);
-            MediaFile media = MediaFile.builder()
+            storage.put(storageKey, tempFile);
+            MediaFile media = repo.save(MediaFile.builder()
                     .uploaderId(uploaderId).roomId(null)
-                    .filename(s3Key).originalName(originalName)
-                    .url(url).mimeType(contentType)
-                    .sizeKb(file.getSize() / 1024).build();
-            log.info("Profile picture uploaded for user {}: {}", uploaderId, url);
+                    .filename(storageKey).originalName(originalName)
+                    .url("pending").mimeType(contentType)
+                    .sizeKb(file.getSize() / 1024).build());
+            applyUrls(media, false);
+            log.info("Profile picture stored for user {}: {}", uploaderId, media.getUrl());
             return repo.save(media);
         } finally {
             Files.deleteIfExists(tempFile);
@@ -304,30 +254,25 @@ public class MediaService {
     public void delete(String id) {
         repo.findById(id).ifPresent(f -> {
             try {
-                s3Client.deleteObject(DeleteObjectRequest.builder()
-                        .bucket(bucketName)
-                        .key(f.getFilename())
-                        .build());
-
-                if (f.getThumbnailUrl() != null) {
-                    String thumbKey = f.getFilename().replace(f.getOriginalName(), "thumb_" + f.getOriginalName());
-                    s3Client.deleteObject(DeleteObjectRequest.builder()
-                            .bucket(bucketName)
-                            .key(thumbKey)
-                            .build());
-                }
+                storage.delete(f.getFilename());
+                if (f.getThumbnailUrl() != null) storage.delete(thumbnailKey(f));
             } catch (Exception e) {
-                log.warn("Failed to delete file from S3: {}", e.getMessage());
+                log.warn("Failed to delete stored file {}: {}", f.getFilename(), e.getMessage());
             }
             repo.delete(f);
         });
     }
 
-    private String buildMediaUrl(String s3Key) {
-        if (cloudfrontDomain != null && !cloudfrontDomain.isBlank()) {
-            return "https://" + cloudfrontDomain + "/" + s3Key;
-        }
-        return String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, s3Key);
+    /** Storage key of a file's thumbnail (stored next to the original as thumb_{name}). */
+    public static String thumbnailKey(MediaFile f) {
+        return f.getFilename().replace(f.getOriginalName(), "thumb_" + f.getOriginalName());
+    }
+
+    private void applyUrls(MediaFile media, boolean hasThumbnail) {
+        String base = publicBaseUrl.endsWith("/") ? publicBaseUrl.substring(0, publicBaseUrl.length() - 1) : publicBaseUrl;
+        String url = base + "/api/v1/media/file/" + media.getMediaId();
+        media.setUrl(url);
+        media.setThumbnailUrl(hasThumbnail ? url + "/thumb" : null);
     }
 
     /**

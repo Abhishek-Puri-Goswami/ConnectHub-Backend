@@ -197,10 +197,21 @@ scratch e2e scripts into a committed regression suite).
   from the declared Content-Length per plan (FREE 10MB, paid 250MB, avatars 2MB) *before* the body is
   spooled, so a FREE user can't push 250MB through. Oversize/quota errors are 413, empty file / bad
   type are 400 (were 500). Live-verified; PRO-size uploads are unit-tested only (need storage, see #7).
-- **Phase 2 remaining**: **#7 media storage = local disk** (decision: not Cloudinary/S3,
-  consistent with the local-only direction): a `StorageProvider` abstraction with a
-  `LocalDisk` implementation; files served through authenticated or short-lived
-  signed URLs since `<img>` can't send an Authorization header; #13.
+- **#7 media storage = local disk — DONE**: S3 (and its dead credentials) is gone; media-service uses a
+  `StorageProvider` interface with a `LocalDiskStorageProvider` (root `~/connecthub-media` or
+  `MEDIA_STORAGE_DIR`; keys that resolve outside the root are refused). Stored URLs are stable
+  (`http://localhost:8080/api/v1/media/file/<id>[/thumb]`, from `MEDIA_PUBLIC_BASE_URL`) because they live
+  inside messages/avatars forever. **Deviation from the "short-lived signed URL" plan:** an expiring URL
+  can't be stored, so instead `POST /media/session` (normal auth) sets a 30-minute HttpOnly, SameSite=Lax
+  cookie (`ch_media`, HMAC-signed with a media-specific domain prefix, so a login JWT is not accepted and
+  vice versa) scoped to `/api/v1/media/file`; the frontend renews it every 20 min (`services/mediaSession.js`,
+  started from ChatLayout). Serving requires that cookie + room membership (avatars: any signed-in user),
+  is dead after suspension/password reset/revoke-all, supports Range (video), and sends nosniff + sandbox CSP;
+  documents are attachments. The gateway lets `/api/v1/media/file/` through unauthenticated (media-service
+  does its own check). Cookie relies on localhost being same-site across ports — revisit if ever hosted.
+  Also fixed: thumbnails were labelled JPEG but written in the source format. Old S3-era media rows have
+  dead URLs (their bytes never existed locally). Live-verified (upload, serve, 401/403 cases, Range, reset).
+- **Phase 2 remaining**: #13.
 - **Phase 3**: #9, #10, #15, #16. **Phase 4**: #11 (billing UI still advertises
   the old limits), #12, #14. **Phase 5**: P2 hygiene #17–#22.
 

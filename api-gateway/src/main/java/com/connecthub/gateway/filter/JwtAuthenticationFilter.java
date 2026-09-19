@@ -107,6 +107,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/login/oauth2/",
             "/ws/",
             "/api/v1/payments/webhook",
+            "/api/v1/media/file/",        // file bytes: media-service checks its own signed session cookie
             "/actuator/",
             "/swagger-ui/",
             "/v3/api-docs/",

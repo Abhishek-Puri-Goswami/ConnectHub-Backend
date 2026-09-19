@@ -34,15 +34,16 @@ spring:
       group-id: media-service-group
       auto-offset-reset: earliest
 
-aws:
-  s3:
-    bucket: ${AWS_S3_BUCKET:connecthub-media-bucket}
-  region: ${AWS_REGION:ap-south-1}
-  credentials:
-    access-key: ${AWS_ACCESS_KEY_ID}
-    secret-key: ${AWS_SECRET_ACCESS_KEY}
-  cloudfront:
-    domain: ${AWS_CLOUDFRONT_DOMAIN:}
+media:
+  # Files are stored on local disk; delete this folder to wipe all uploads.
+  storage:
+    dir: ${MEDIA_STORAGE_DIR:${user.home}/connecthub-media}
+  # Origin the browser uses to reach the api-gateway; stored file URLs are <this>/api/v1/media/file/<id>
+  public-base-url: ${MEDIA_PUBLIC_BASE_URL:http://localhost:8080}
+  # Secret for signing media-session cookies (shared with the JWT secret on purpose: one secret to manage)
+  signing-secret: ${JWT_SECRET}
+  # Set true only when the site is served over HTTPS
+  cookie-secure: ${MEDIA_COOKIE_SECURE:false}
 
 eureka:
   client:

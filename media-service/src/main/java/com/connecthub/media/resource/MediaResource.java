@@ -1,12 +1,22 @@
 package com.connecthub.media.resource;
 
 import com.connecthub.media.client.RoomServiceClient;
+import com.connecthub.media.service.MediaSessionService;
+import com.connecthub.media.storage.StorageProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseCookie;
 import com.connecthub.media.config.MediaTierLimits;
 import com.connecthub.media.entity.MediaFile;
 import com.connecthub.media.service.MediaService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -33,6 +43,13 @@ public class MediaResource {
 
     private final MediaService svc;
     private final RoomServiceClient roomServiceClient;
+    private final MediaSessionService sessions;
+    private final StorageProvider storage;
+
+    static final String SESSION_COOKIE = "ch_media";
+
+    @Value("${media.cookie-secure:false}")
+    private boolean cookieSecure;
 
     @PostMapping("/upload")
     public ResponseEntity<MediaFile> upload(@RequestParam("file") MultipartFile file,
@@ -132,6 +149,76 @@ public class MediaResource {
      * Returns true if the Feign call confirms membership. On Feign failure (room-service
      * is down), returns false to fail-closed — denying access rather than allowing it.
      */
+    /**
+     * Starts (or renews) the caller's media session: an HttpOnly cookie that lets the browser fetch
+     * files with plain {@code <img>}/{@code <video>} tags. Requires normal authentication (the gateway
+     * validates the JWT); the cookie is only valid for {@code /api/v1/media/file/**}.
+     */
+    @PostMapping("/session")
+    public ResponseEntity<java.util.Map<String, Object>> startSession(@RequestHeader("X-User-Id") int uid) {
+        ResponseCookie cookie = ResponseCookie.from(SESSION_COOKIE, sessions.issue(uid))
+                .httpOnly(true).secure(cookieSecure).sameSite("Lax")
+                .path("/api/v1/media/file").maxAge(MediaSessionService.LIFETIME_SECONDS).build();
+        return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(java.util.Map.of("expiresInSeconds", MediaSessionService.LIFETIME_SECONDS));
+    }
+
+    @GetMapping("/file/{id}")
+    public ResponseEntity<Resource> file(@PathVariable String id,
+            @CookieValue(name = SESSION_COOKIE, required = false) String session) {
+        return serve(id, session, false);
+    }
+
+    @GetMapping("/file/{id}/thumb")
+    public ResponseEntity<Resource> thumbnail(@PathVariable String id,
+            @CookieValue(name = SESSION_COOKIE, required = false) String session) {
+        return serve(id, session, true);
+    }
+
+    /**
+     * Serves file bytes. Authorization: a valid media session, and for room files membership of that
+     * room (avatars, which belong to no room, are visible to any signed-in user).
+     */
+    private ResponseEntity<Resource> serve(String id, String session, boolean thumb) {
+        Optional<Integer> uid = sessions.verify(session);
+        if (uid.isEmpty()) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        Optional<MediaFile> found = svc.getById(id);
+        if (found.isEmpty()) return ResponseEntity.notFound().build();
+        MediaFile media = found.get();
+        if (media.getRoomId() != null && !media.getRoomId().isBlank()
+                && !checkRoomMembership(media.getRoomId(), uid.get())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        if (thumb && media.getThumbnailUrl() == null) return ResponseEntity.notFound().build();
+        try {
+            java.nio.file.Path path = storage.resolve(thumb ? MediaService.thumbnailKey(media) : media.getFilename());
+            MediaType type = thumb ? MediaType.IMAGE_JPEG : parseType(media.getMimeType());
+            boolean inline = "image".equals(type.getType()) || "video".equals(type.getType());
+            String name = thumb ? "thumb_" + media.getOriginalName() : media.getOriginalName();
+            return ResponseEntity.ok()
+                    .contentType(type)
+                    .header(HttpHeaders.CONTENT_DISPOSITION, (inline ? ContentDisposition.inline() : ContentDisposition.attachment())
+                            .filename(name).build().toString())
+                    // a served file must never execute or be sniffed into something executable
+                    .header("X-Content-Type-Options", "nosniff")
+                    .header("Content-Security-Policy", "default-src 'none'; sandbox")
+                    .header("Cross-Origin-Resource-Policy", "cross-origin")
+                    .cacheControl(CacheControl.maxAge(java.time.Duration.ofMinutes(5)).cachePrivate())
+                    .body(new FileSystemResource(path));
+        } catch (java.io.IOException e) {
+            log.warn("Stored file missing for media {}: {}", id, e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    private static MediaType parseType(String mime) {
+        try {
+            return MediaType.parseMediaType(mime);
+        } catch (Exception e) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
+    }
+
     private boolean checkRoomMembership(String roomId, int userId) {
         try {
             Boolean isMember = roomServiceClient.isMember(roomId, userId);

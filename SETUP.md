@@ -160,15 +160,7 @@ protect the Eureka dashboard and Spring Boot Admin respectively.
 `auth-service`'s first boot. Choose your own. Note: it's seeded with role
 `ADMIN`, not `PLATFORM_ADMIN` — see step 11 below to promote it.
 
-**AWS S3** (media uploads — optional, media-service still starts without
-it, uploads will just fail):
-1. Create an AWS account at https://aws.amazon.com (free tier available)
-2. S3 console → Create bucket → note the bucket name and region
-3. IAM console → Users → Create user → Attach policy with
-   `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject` on that bucket →
-   Security credentials tab → Create access key
-4. Fill `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET`,
-   `AWS_REGION`
+**Media storage** — nothing to configure. Uploaded files are stored on local disk in `~/connecthub-media` (override with `MEDIA_STORAGE_DIR`; delete the folder to wipe all uploads). Files are served through the api-gateway behind a short-lived signed cookie, so no cloud account is needed.
 
 **Gmail SMTP** (email OTP/notifications — needed for registration to fully
 work, since registration OTP is emailed):

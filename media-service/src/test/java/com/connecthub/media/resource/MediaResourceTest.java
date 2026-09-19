@@ -26,6 +26,8 @@ class MediaResourceTest {
 
     @Mock private MediaService svc;
     @Mock private RoomServiceClient roomServiceClient;
+    @Mock private com.connecthub.media.service.MediaSessionService sessions;
+    @Mock private com.connecthub.media.storage.StorageProvider storage;
     @InjectMocks private MediaResource resource;
 
     @BeforeEach

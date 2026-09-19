@@ -64,7 +64,7 @@ http://localhost:8761
 - [x] Admin Server Implementation
 - [x] API Gateway Configuration
 - [x] Auth Service with OAuth2 and OTP
-- [x] Media Service (S3 Integration)
+- [x] Media Service (local-disk storage)
 - [x] Message Service (Cursor Pagination)
 - [x] Notification Service (Email & SMS)
 - [x] Payment Service

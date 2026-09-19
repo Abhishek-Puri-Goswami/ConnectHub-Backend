@@ -23,6 +23,9 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/**").permitAll()
+                // File bytes are authorized by MediaResource itself (signed media-session cookie + room
+                // membership): browsers cannot attach an Authorization header to <img>/<video> requests.
+                .requestMatchers("/api/v1/media/file/**").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(gatewayAuthFilter, UsernamePasswordAuthenticationFilter.class);

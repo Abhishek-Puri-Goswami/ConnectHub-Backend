@@ -147,6 +147,31 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void filter_mediaFileBytes_passThroughWithoutJwt_butOtherMediaRoutesStillNeedOne() {
+        // file bytes are authorized by media-service via its signed cookie (<img> can't send a JWT)
+        MockServerWebExchange file = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/v1/media/file/abc").build());
+        filter.filter(file, chain).block();
+        verify(chain).filter(any());
+
+        MockServerWebExchange upload = MockServerWebExchange.from(
+                MockServerHttpRequest.post("/api/v1/media/upload").build());
+        filter.filter(upload, chain).block();
+        assertEquals(HttpStatus.UNAUTHORIZED, upload.getResponse().getStatusCode());
+        verify(chain, times(1)).filter(any());
+    }
+
+    @Test
+    void filter_stripsInternalServiceHeaderFromExternalRequests() {
+        String token = generateToken("123", "USER", "FREE");
+        MockServerWebExchange ex = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/users/profile")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header("X-Internal-Service", "websocket-service").build());
+        filter.filter(ex, chain).block();
+        verify(chain).filter(argThat(e -> e.getRequest().getHeaders().getFirst("X-Internal-Service") == null));
+    }
+
+    @Test
     void filter_invalidToken_returns401() {
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/users/profile")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer invalid-token.abcd.efgh")
