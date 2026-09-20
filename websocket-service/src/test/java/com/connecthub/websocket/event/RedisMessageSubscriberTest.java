@@ -182,6 +182,18 @@ class RedisMessageSubscriberTest {
         );
     }
 
+    // ── BROADCAST channel ────────────────────────────────────────────────────
+
+    @Test
+    void broadcastChannel_pushesTheAnnouncementToEveryClient() throws Exception {
+        Map<String, Object> announcement = Map.of("type", "BROADCAST", "title", "Maintenance", "message", "Restart at 23:00");
+        when(objectMapper.readValue(any(byte[].class), eq(Map.class))).thenReturn(announcement);
+
+        subscriber.onMessage(msg(RedisConfig.BROADCAST_CHANNEL, "{}"), null);
+
+        verify(messaging).convertAndSend("/topic/broadcast", announcement);
+    }
+
     // ── Unknown channel ──────────────────────────────────────────────────────
 
     @Test

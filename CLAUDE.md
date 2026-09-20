@@ -302,6 +302,15 @@ scratch e2e scripts into a committed regression suite).
   (+dlq), chat.messages.rejected (+dlq), room.created, room.deleted, auth.user.deleted, notifications.offline (+dlq),
   user.subscription.status (+dlq), email.events (+dlq). Known gap left alone: the inbound Kafka fallback persists
   without re-checking room membership (websocket-service checks before publishing).
+- **#19 frontend tests/code — DONE** (frontend repo): unit tests pass with or without `VITE_API_BASE_URL` (419/419); the 20 stale
+  Playwright tests were fixed (they encoded old UI and mock shapes that never matched the real API: audit logs, messages);
+  full suite = 411 passed / 0 failed over chromium+firefox+mobile-chrome, local workers capped at 2 (Firefox timed out
+  under load). Live smoke: `SMOKE_LIVE=true ADMIN_EMAIL=… ADMIN_PASSWORD=… npx playwright test tests/smoke`. Removed dead
+  `AddContactModal`; replaced 30 silent `catch {}` with stated reasons. Two finished features had never been mounted:
+  `BroadcastBanner` (admin announcements) and `NotificationCenter` (bell) — now in App/Sidebar. Mounting the banner exposed
+  a backend bug: websocket-service listened on the `chat:broadcast` Redis channel but had no case for it in
+  `RedisMessageSubscriber`, so admin broadcasts were dropped ("Unknown Redis channel") — fixed and verified in a real
+  browser. Everything here is verified against the stack; nothing left in #19.
 - **#14 endpoints the frontend calls that did not exist — DONE (no frontend change needed)**: (1) `POST
   /auth/forgot-password/phone` and (2) `POST /auth/verify-reset-otp/phone` — SMS password reset, mirroring the email flow
   (purpose `resetphone`, same reset-token JWT, generic "if an account exists" answer, only active LOCAL accounts with a
@@ -310,7 +319,7 @@ scratch e2e scripts into a committed regression suite).
   no room id/creator/members/code), any signed-in user, 404 for unknown/revoked codes. Because codes are only 8 hex chars,
   preview and join lookups are limited to 20/min per user (`InviteLookupLimiter`, 429). Live-verified (27 checks).
   Note: registration only verifies the email, so phone-reset only works for users who verified their phone number.
-- **Remaining**: Phase 5 P2 hygiene #19–#22, then the final regression/security retest (turn the scratch
+- **Remaining**: Phase 5 P2 hygiene #20–#22, then the final regression/security retest (turn the scratch
   attack/e2e scripts into a committed suite). Also open: refresh-token revocation on logout, phone-login account enumeration.
 
 ## Not yet done

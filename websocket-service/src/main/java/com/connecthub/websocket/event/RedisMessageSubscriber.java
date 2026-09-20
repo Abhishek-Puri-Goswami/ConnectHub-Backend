@@ -161,6 +161,15 @@ public class RedisMessageSubscriber implements MessageListener {
                     messaging.convertAndSendToUser(userId, "/queue/notifications",
                             java.util.Map.of("type", "ACCOUNT_SUSPENDED"));
                 }
+                case RedisConfig.BROADCAST_CHANNEL -> {
+                    /*
+                     * Platform-wide admin announcement (published by BroadcastController) — push to every
+                     * connected client on /topic/broadcast. The frontend shows it as a dismissible banner.
+                     * Body: {"type":"BROADCAST","title":...,"message":...,"actorId":...,"sentAt":...}
+                     */
+                    java.util.Map<String, Object> announcement = objectMapper.readValue(message.getBody(), java.util.Map.class);
+                    messaging.convertAndSend("/topic/broadcast", announcement);
+                }
                 default -> log.warn("Unknown Redis channel: {}", channel);
             }
         } catch (Exception e) {
