@@ -290,4 +290,12 @@ class MessageServiceTest {
         assertNull(result.get(0).getContent());
         assertNull(result.get(0).getMediaUrl());
     }
+
+    @Test
+    void clearHistory_removesReactionsBeforeTheMessagesTheyPointAt() {
+        svc.clearHistory("room-1");
+        org.mockito.InOrder order = inOrder(reactRepo, msgRepo);
+        order.verify(reactRepo).deleteByRoomId("room-1");
+        order.verify(msgRepo).deleteByRoomId("room-1");
+    }
 }

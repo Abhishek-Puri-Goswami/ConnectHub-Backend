@@ -31,6 +31,8 @@ public class UserDeletionListenerTest {
         userDeletionListener.onUserDeleted(userIdStr);
         verify(messageRepository, times(1)).deleteBySenderId(123);
         verify(reactionRepository, times(1)).deleteByUserId(123);
+        // reactions other people left on the deleted user messages must not be orphaned
+        verify(reactionRepository, times(1)).deleteOnMessagesBySender(123);
     }
 
     @Test

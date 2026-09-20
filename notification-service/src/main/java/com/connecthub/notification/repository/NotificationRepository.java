@@ -21,5 +21,14 @@ public interface NotificationRepository extends JpaRepository<Notification, Inte
     @Modifying
     @Query("UPDATE Notification n SET n.emailSent = true WHERE n.recipientId = :rid AND n.isRead = false AND n.emailSent = false AND n.createdAt < :threshold")
     void markEmailSent(@Param("rid") Integer rid, @Param("threshold") LocalDateTime threshold);
-}
 
+    /** Everything addressed to a user (used when the account is deleted). */
+    @Modifying
+    @Query("DELETE FROM Notification n WHERE n.recipientId = :rid")
+    int deleteAllByRecipient(@Param("rid") int recipientId);
+
+    /** Notifications about a room (used when the room is deleted). */
+    @Modifying
+    @Query("DELETE FROM Notification n WHERE n.roomId = :roomId")
+    int deleteAllByRoom(@Param("roomId") String roomId);
+}

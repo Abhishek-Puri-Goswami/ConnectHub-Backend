@@ -270,6 +270,19 @@ scratch e2e scripts into a committed regression suite).
   5 uploads/min; Pro = 500 / 250 / 10 GB / 250 MB / 30 per min; 60 messages/min on every plan (not a paid feature).
   The backend did NOT actually enforce the documented 500 group-chat cap for paid users (only FREE was capped) — now
   enforced in room-service, and upgrade prompts say "Upgrade to Pro". If a backend limit changes, update `plans.js`.
+- **#12 orphaned data — DONE**: deleting a room left its messages/reactions/files/notifications/unread counters behind, and
+  deleting an account left its notifications, push (FCM) device tokens and email preference (notification-service had no
+  listener). Now: room-service publishes `room.deleted` (after commit) and message/media/notification/websocket-service
+  consume it; notification and websocket-service also consume `auth.user.deleted`; message-service also removes reactions
+  others left on a deleted user's messages; auth-service clears the deleted user's `session:*` keys and profile cache.
+  Room lifecycle tidy-up: a room nobody is left in is deleted, a DM with a deleted account is deleted, and if the creator
+  leaves/is deleted the room is handed to the longest-standing admin (else member, promoted to ADMIN) instead of pointing
+  at nobody. **Kafka lesson learned**: a topic that several services consume must be declared identically (same partition
+  count) in each of them (`NewTopic` beans) — the first subscriber otherwise auto-creates it with 1 partition and
+  consumers that subscribed early silently miss events on partitions 1–2 for minutes. New listeners also use
+  `auto.offset.reset=earliest`. `.\cleanup-orphans.ps1` (report; `-Fix` deletes) checks every DB + Redis for leftovers and
+  is part of the final regression check; media rows are report-only (files live on disk). Live-verified (28 checks) and the
+  existing leftovers (3 empty rooms, stale unread/session keys) were cleaned with the script.
 - **#14 endpoints the frontend calls that did not exist — DONE (no frontend change needed)**: (1) `POST
   /auth/forgot-password/phone` and (2) `POST /auth/verify-reset-otp/phone` — SMS password reset, mirroring the email flow
   (purpose `resetphone`, same reset-token JWT, generic "if an account exists" answer, only active LOCAL accounts with a
@@ -278,7 +291,7 @@ scratch e2e scripts into a committed regression suite).
   no room id/creator/members/code), any signed-in user, 404 for unknown/revoked codes. Because codes are only 8 hex chars,
   preview and join lookups are limited to 20/min per user (`InviteLookupLimiter`, 429). Live-verified (27 checks).
   Note: registration only verifies the email, so phone-reset only works for users who verified their phone number.
-- **Remaining**: #12 (data cleanup), Phase 5 P2 hygiene #17–#22, then the final regression/security retest (turn the scratch
+- **Remaining**: Phase 5 P2 hygiene #17–#22, then the final regression/security retest (turn the scratch
   attack/e2e scripts into a committed suite). Also open: refresh-token revocation on logout, phone-login account enumeration.
 
 ## Not yet done

@@ -11,4 +11,6 @@ public interface DeviceTokenRepository extends JpaRepository<DeviceToken, Long> 
     void deleteByFcmToken(String fcmToken);
     @org.springframework.transaction.annotation.Transactional
     void deleteByFcmTokenAndUserId(String fcmToken, int userId);
+    @org.springframework.transaction.annotation.Transactional
+    void deleteByUserId(int userId);
 }

@@ -270,7 +270,10 @@ public class MessageService {
      * Used when a room is deleted or when an admin clears chat history. Unlike soft
      * delete, this is a hard physical delete — the history cannot be recovered.
      */
-    public void clearHistory(String roomId) { msgRepo.deleteByRoomId(roomId); }
+    public void clearHistory(String roomId) {
+        reactRepo.deleteByRoomId(roomId); // reactions first: they point at the messages
+        msgRepo.deleteByRoomId(roomId);
+    }
 
     /** countToday — returns the number of non-deleted messages sent since midnight today. Used by admin stats and analytics. */
     @Transactional(readOnly = true)

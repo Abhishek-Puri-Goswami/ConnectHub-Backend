@@ -44,5 +44,5 @@ public interface RoomRepository extends JpaRepository<Room, String> {
     /** Returns the number of rooms that have received at least one message (lastMessageAt set). */
     @Query("SELECT COUNT(r) FROM Room r WHERE r.lastMessageAt IS NOT NULL")
     long countActiveRooms();
+    java.util.List<Room> findByCreatedById(Integer createdById);
 }
-

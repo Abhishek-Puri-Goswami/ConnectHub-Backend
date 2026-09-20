@@ -118,4 +118,29 @@ public class UnreadCountService {
     private String buildKey(int userId, String roomId) {
         return UNREAD_PREFIX + userId + ":" + roomId;
     }
+
+    /** Drops the counters of every user for a deleted room. Uses SCAN, never the blocking KEYS command. */
+    public int clearRoom(String roomId) {
+        return deleteMatching(UNREAD_PREFIX + "*:" + roomId);
+    }
+
+    /** Drops all counters of a deleted user. */
+    public int clearUser(int userId) {
+        return deleteMatching(UNREAD_PREFIX + userId + ":*");
+    }
+
+    private int deleteMatching(String pattern) {
+        int removed = 0;
+        org.springframework.data.redis.core.ScanOptions options =
+                org.springframework.data.redis.core.ScanOptions.scanOptions().match(pattern).count(200).build();
+        try (org.springframework.data.redis.core.Cursor<String> cursor = redis.scan(options)) {
+            java.util.List<String> batch = new java.util.ArrayList<>();
+            while (cursor.hasNext()) batch.add(cursor.next());
+            for (String key : batch) {
+                Boolean gone = redis.delete(key);
+                if (Boolean.TRUE.equals(gone)) removed++;
+            }
+        }
+        return removed;
+    }
 }

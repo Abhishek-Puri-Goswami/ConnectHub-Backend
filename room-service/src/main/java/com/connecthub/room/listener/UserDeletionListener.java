@@ -1,6 +1,6 @@
 package com.connecthub.room.listener;
 
-import com.connecthub.room.repository.RoomMemberRepository;
+import com.connecthub.room.service.RoomService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class UserDeletionListener {
 
-    private final RoomMemberRepository roomMemberRepository;
+    private final RoomService roomService;
 
     @KafkaListener(topics = "auth.user.deleted", groupId = "room-service-group")
     @Transactional
@@ -21,7 +21,7 @@ public class UserDeletionListener {
             int userId = Integer.parseInt(userIdStr);
             log.warn("USER_DELETED event received for userId: {}. Evicting from all rooms/DMs.", userId);
 
-            roomMemberRepository.deleteByUserId(userId);
+            roomService.onUserDeleted(userId);
 
             log.info("Successfully evicted user {} from all rooms.", userId);
         } catch (NumberFormatException e) {

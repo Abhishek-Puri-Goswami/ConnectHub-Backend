@@ -105,4 +105,9 @@ public class KafkaConfig {
         factory.setConcurrency(3);
         return factory;
     }
+
+    /** Same reasoning as room.deleted: declare the shape here so consumers never race its auto-creation. */
+    @Bean public NewTopic userDeletedTopic() {
+        return TopicBuilder.name("auth.user.deleted").partitions(1).replicas(1).build();
+    }
 }

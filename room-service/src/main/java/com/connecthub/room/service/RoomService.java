@@ -213,7 +213,35 @@ public class RoomService {
      * This is a hard delete — the room and its membership history are unrecoverable.
      * Message history is cleaned up separately via message-service's clearHistory().
      */
-    public void deleteRoom(String id) { memberRepo.deleteByRoomId(id); roomRepo.deleteById(id); }
+    public void deleteRoom(String id) {
+        memberRepo.deleteByRoomId(id);
+        roomRepo.deleteById(id);
+        cacheService.evict(id);
+        publishRoomDeleted(id);
+    }
+
+    /**
+     * Tells the other services to remove what belongs to a deleted room (messages, reactions, files,
+     * notifications, unread counters). Sent after the database change is committed, so a rolled-back delete
+     * never wipes data. A failed publish is logged, not thrown: the room is already gone.
+     */
+    private void publishRoomDeleted(String roomId) {
+        Runnable send = () -> {
+            try {
+                kafkaTemplate.send("room.deleted", roomId);
+            } catch (Exception e) {
+                log.warn("Failed to publish room.deleted for {}: {}", roomId, e.getMessage());
+            }
+        };
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override public void afterCommit() { send.run(); }
+                    });
+        } else {
+            send.run();
+        }
+    }
 
     /**
      * addMember — adds a user to a room with a given role.
@@ -242,6 +270,56 @@ public class RoomService {
     public void removeMember(String roomId, int userId) {
         memberRepo.deleteByRoomIdAndUserId(roomId, userId);
         cacheService.evict(roomId);
+        tidyAfterDeparture(roomId, userId);
+    }
+
+    /**
+     * After someone leaves (or their account is deleted): a room nobody is left in is deleted, and if the leaver was
+     * the creator the room is handed to the longest-standing admin (else longest-standing member), who becomes ADMIN.
+     * Otherwise nobody could manage or delete the room, and the creator id would point at nobody.
+     */
+    private void tidyAfterDeparture(String roomId, int departedUserId) {
+        Optional<Room> found = roomRepo.findByRoomId(roomId);
+        if (found.isEmpty()) return;
+        Room room = found.get();
+        List<RoomMember> remaining = memberRepo.findByRoomId(roomId);
+        if (remaining.isEmpty()) {
+            deleteRoom(roomId);
+            return;
+        }
+        if (room.getCreatedById() != null && room.getCreatedById() == departedUserId) {
+            Comparator<RoomMember> byJoined = Comparator.comparing(RoomMember::getJoinedAt,
+                    Comparator.nullsLast(Comparator.naturalOrder()));
+            RoomMember next = remaining.stream().filter(r -> "ADMIN".equals(r.getRole())).min(byJoined)
+                    .orElseGet(() -> remaining.stream().min(byJoined).orElseThrow());
+            next.setRole("ADMIN");
+            memberRepo.save(next);
+            room.setCreatedById(next.getUserId());
+            roomRepo.save(room);
+            cacheService.evict(roomId);
+            log.info("Room {} handed over to user {}", roomId, next.getUserId());
+        }
+    }
+
+    /**
+     * An account was deleted: remove the user from every room. A DM with a deleted person is deleted outright
+     * (there is no one left to talk to); groups are tidied by {@link #tidyAfterDeparture}. Rooms the user created but
+     * had already left are handed over too, so no room keeps a creator id that points at nobody.
+     */
+    public void onUserDeleted(int userId) {
+        for (String roomId : memberRepo.findRoomIdsByUserId(userId)) {
+            Optional<Room> room = roomRepo.findByRoomId(roomId);
+            memberRepo.deleteByRoomIdAndUserId(roomId, userId);
+            cacheService.evict(roomId);
+            if (room.isPresent() && ROOM_TYPE_DM.equals(room.get().getType())) {
+                deleteRoom(roomId);
+            } else {
+                tidyAfterDeparture(roomId, userId);
+            }
+        }
+        for (Room created : roomRepo.findByCreatedById(userId)) {
+            tidyAfterDeparture(created.getRoomId(), userId);
+        }
     }
 
     /**

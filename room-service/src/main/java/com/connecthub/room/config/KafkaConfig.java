@@ -35,6 +35,10 @@ public class KafkaConfig {
     @Bean public NewTopic roomUpdatesTimestampDlq() {
         return TopicBuilder.name("room.updates.timestamp.dlq").partitions(1).replicas(1).build();
     }
+    /** Published when a room is deleted (payload: the room id) so other services can remove its data. */
+    @Bean public NewTopic roomDeleted() {
+        return TopicBuilder.name("room.deleted").partitions(3).replicas(1).build();
+    }
     @Bean public NewTopic roomCreated() {
         return TopicBuilder.name("room.created").partitions(3).replicas(1).build();
     }

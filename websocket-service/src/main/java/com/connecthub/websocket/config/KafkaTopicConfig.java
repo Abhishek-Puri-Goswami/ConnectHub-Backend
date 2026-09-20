@@ -46,4 +46,18 @@ public class KafkaTopicConfig {
     @Bean public NewTopic roomCreatedConsumed() {
         return TopicBuilder.name("room.created").partitions(3).replicas(1).build();
     }
+
+    /**
+     * Declared identically (3 partitions) by every service that reads it, so the topic always exists in this shape
+     * before any listener subscribes. Otherwise the first subscriber auto-creates it with 1 partition and the others
+     * only discover partitions 1-2 minutes later, silently missing events that land there.
+     */
+    @Bean public NewTopic roomDeletedTopic() {
+        return TopicBuilder.name("room.deleted").partitions(3).replicas(1).build();
+    }
+
+    /** Same reasoning as room.deleted: declare the shape here so consumers never race its auto-creation. */
+    @Bean public NewTopic userDeletedTopic() {
+        return TopicBuilder.name("auth.user.deleted").partitions(1).replicas(1).build();
+    }
 }

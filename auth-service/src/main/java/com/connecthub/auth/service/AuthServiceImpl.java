@@ -652,8 +652,23 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void deleteUser(int userId) {
         userRepository.deleteById(userId);
+        profileCache.evict(userId);
+        removeSessionKeys(userId);
         log.info("Publishing USER_DELETED event for userId: {}", userId);
         kafkaTemplate.send("auth.user.deleted", String.valueOf(userId));
+    }
+
+    /** Session-tracking keys ("session:{userId}:{jti}") of a deleted account; they would otherwise live out their TTL. */
+    private void removeSessionKeys(int userId) {
+        org.springframework.data.redis.core.ScanOptions options = org.springframework.data.redis.core.ScanOptions
+                .scanOptions().match("session:" + userId + ":*").count(200).build();
+        try (org.springframework.data.redis.core.Cursor<String> cursor = redis.scan(options)) {
+            java.util.List<String> keys = new java.util.ArrayList<>();
+            while (cursor.hasNext()) keys.add(cursor.next());
+            if (!keys.isEmpty()) redis.delete(keys);
+        } catch (Exception e) {
+            log.warn("Could not remove session keys of user {}: {}", userId, e.getMessage());
+        }
     }
 
     /**

@@ -23,6 +23,7 @@ class RoomServiceTest {
     @Mock RoomMemberRepository memberRepo;
     @Mock RoomCacheService cacheService;
     @Mock UserDirectory users;
+    @Mock org.springframework.kafka.core.KafkaTemplate<String, Object> kafkaTemplate;
     @InjectMocks RoomService svc;
 
     // ── createRoom ───────────────────────────────────────────────────────────
@@ -351,6 +352,102 @@ class RoomServiceTest {
         svc.deleteRoom("r1");
         verify(memberRepo).deleteByRoomId("r1");
         verify(roomRepo).deleteById("r1");
+    }
+
+    @Test
+    void deleteRoom_publishesRoomDeleted_soOtherServicesRemoveTheRoomsData() {
+        svc.deleteRoom("r1");
+        verify(kafkaTemplate).send("room.deleted", "r1");
+        verify(cacheService).evict("r1");
+    }
+
+    @Test
+    void deleteRoom_publishFailureDoesNotUndoTheDelete() {
+        when(kafkaTemplate.send(eq("room.deleted"), any())).thenThrow(new RuntimeException("kafka down"));
+        assertDoesNotThrow(() -> svc.deleteRoom("r1"));
+        verify(roomRepo).deleteById("r1");
+    }
+
+    // ── leaving / account deletion cleanup ───────────────────────────────────
+
+    private RoomMember member(int uid, String role, int joinedDaysAgo) {
+        return RoomMember.builder().roomId("g1").userId(uid).role(role)
+                .joinedAt(java.time.LocalDateTime.now().minusDays(joinedDaysAgo)).build();
+    }
+
+    @Test
+    void removeMember_lastMemberLeaves_roomIsDeleted() {
+        Room room = Room.builder().roomId("g1").type("GROUP").createdById(1).build();
+        when(roomRepo.findByRoomId("g1")).thenReturn(Optional.of(room));
+        when(memberRepo.findByRoomId("g1")).thenReturn(List.of());
+
+        svc.removeMember("g1", 1);
+
+        verify(roomRepo).deleteById("g1");
+        verify(kafkaTemplate).send("room.deleted", "g1");
+    }
+
+    @Test
+    void removeMember_creatorLeaves_roomGoesToTheLongestStandingAdmin() {
+        Room room = Room.builder().roomId("g1").type("GROUP").createdById(1).build();
+        RoomMember newer = member(3, "ADMIN", 1), older = member(2, "ADMIN", 9), plain = member(4, "MEMBER", 30);
+        when(roomRepo.findByRoomId("g1")).thenReturn(Optional.of(room));
+        when(memberRepo.findByRoomId("g1")).thenReturn(List.of(newer, plain, older));
+
+        svc.removeMember("g1", 1);
+
+        assertEquals(2, room.getCreatedById());
+        verify(roomRepo).save(room);
+        verify(roomRepo, never()).deleteById(any());
+    }
+
+    @Test
+    void removeMember_creatorLeaves_noAdmins_longestStandingMemberIsPromoted() {
+        Room room = Room.builder().roomId("g1").type("GROUP").createdById(1).build();
+        RoomMember a = member(5, "MEMBER", 2), b = member(6, "MEMBER", 20);
+        when(roomRepo.findByRoomId("g1")).thenReturn(Optional.of(room));
+        when(memberRepo.findByRoomId("g1")).thenReturn(List.of(a, b));
+
+        svc.removeMember("g1", 1);
+
+        assertEquals(6, room.getCreatedById());
+        assertEquals("ADMIN", b.getRole());
+        verify(memberRepo).save(b);
+    }
+
+    @Test
+    void removeMember_ordinaryMemberLeaves_creatorUnchanged() {
+        Room room = Room.builder().roomId("g1").type("GROUP").createdById(1).build();
+        when(roomRepo.findByRoomId("g1")).thenReturn(Optional.of(room));
+        when(memberRepo.findByRoomId("g1")).thenReturn(List.of(member(1, "ADMIN", 9)));
+
+        svc.removeMember("g1", 7);
+
+        assertEquals(1, room.getCreatedById());
+        verify(roomRepo, never()).save(any());
+    }
+
+    @Test
+    void onUserDeleted_dmIsDeleted_groupIsTidied_andLeftOverCreatedRoomsAreHandedOver() {
+        Room dm = Room.builder().roomId("dm1").type("DM").createdById(9).build();
+        Room group = Room.builder().roomId("g1").type("GROUP").createdById(42).build();
+        Room leftButCreated = Room.builder().roomId("g2").type("GROUP").createdById(42).build();
+        when(memberRepo.findRoomIdsByUserId(42)).thenReturn(List.of("dm1", "g1"));
+        when(roomRepo.findByRoomId("dm1")).thenReturn(Optional.of(dm));
+        when(roomRepo.findByRoomId("g1")).thenReturn(Optional.of(group));
+        when(roomRepo.findByRoomId("g2")).thenReturn(Optional.of(leftButCreated));
+        when(memberRepo.findByRoomId("g1")).thenReturn(List.of(member(7, "ADMIN", 3)));
+        when(memberRepo.findByRoomId("g2")).thenReturn(List.of());
+        when(roomRepo.findByCreatedById(42)).thenReturn(List.of(group, leftButCreated));
+
+        svc.onUserDeleted(42);
+
+        verify(memberRepo).deleteByRoomIdAndUserId("dm1", 42);
+        verify(roomRepo).deleteById("dm1");                    // DM with a deleted person is deleted
+        verify(kafkaTemplate).send("room.deleted", "dm1");
+        assertEquals(7, group.getCreatedById());                // group handed over
+        verify(roomRepo).deleteById("g2");                     // orphan room nobody is in is deleted
+        verify(kafkaTemplate).send("room.deleted", "g2");
     }
 
     // ── addMember ────────────────────────────────────────────────────────────

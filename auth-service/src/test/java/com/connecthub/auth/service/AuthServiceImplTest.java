@@ -369,6 +369,24 @@ class AuthServiceImplTest {
         verify(jwtUtil, never()).generateResetToken(anyInt());
     }
 
+    // ── deleteUser cleanup ───────────────────────────────────────────────────
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void deleteUser_removesTheUserAndTheirLeftoverState_andAnnouncesIt() {
+        org.springframework.data.redis.core.Cursor<String> cursor = mock(org.springframework.data.redis.core.Cursor.class);
+        when(cursor.hasNext()).thenReturn(true, true, false);
+        when(cursor.next()).thenReturn("session:5:jti-a", "session:5:jti-b");
+        when(redis.scan(any(org.springframework.data.redis.core.ScanOptions.class))).thenReturn(cursor);
+
+        authService.deleteUser(5);
+
+        verify(userRepository).deleteById(5);
+        verify(profileCache).evict(5);
+        verify(redis).delete(java.util.List.of("session:5:jti-a", "session:5:jti-b"));
+        verify(kafkaTemplate).send("auth.user.deleted", "5");
+    }
+
     // ── logout ───────────────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")

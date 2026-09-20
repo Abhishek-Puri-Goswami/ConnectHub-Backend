@@ -1,6 +1,6 @@
 package com.connecthub.room.listener;
 
-import com.connecthub.room.repository.RoomMemberRepository;
+import com.connecthub.room.service.RoomService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -13,27 +13,27 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class UserDeletionListenerTest {
 
-    @Mock private RoomMemberRepository roomMemberRepository;
+    @Mock private RoomService roomService;
 
     @InjectMocks private UserDeletionListener listener;
 
     @Test
-    void onUserDeleted_validUserId_deletesAllMemberships() {
+    void onUserDeleted_validUserId_handsOverToRoomService() {
         listener.onUserDeleted("42");
 
-        verify(roomMemberRepository).deleteByUserId(42);
+        verify(roomService).onUserDeleted(42);
     }
 
     @Test
     void onUserDeleted_invalidUserId_doesNotCallRepository() {
         listener.onUserDeleted("not-a-number");
 
-        verify(roomMemberRepository, never()).deleteByUserId(anyInt());
+        verify(roomService, never()).onUserDeleted(anyInt());
     }
 
     @Test
     void onUserDeleted_repositoryThrows_propagatesException() {
-        doThrow(new RuntimeException("db error")).when(roomMemberRepository).deleteByUserId(5);
+        doThrow(new RuntimeException("db error")).when(roomService).onUserDeleted(5);
 
         assertThrows(RuntimeException.class, () -> listener.onUserDeleted("5"));
     }
@@ -42,6 +42,6 @@ class UserDeletionListenerTest {
     void onUserDeleted_nullPayload_doesNotCallRepository() {
         listener.onUserDeleted("null");
 
-        verify(roomMemberRepository, never()).deleteByUserId(anyInt());
+        verify(roomService, never()).onUserDeleted(anyInt());
     }
 }

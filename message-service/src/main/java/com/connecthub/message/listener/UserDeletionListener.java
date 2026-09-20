@@ -23,6 +23,7 @@ public class UserDeletionListener {
             int userId = Integer.parseInt(userIdStr);
             log.warn("USER_DELETED event received for userId: {}. Executing hard delete of messages and reactions.", userId);
             
+            reactionRepository.deleteOnMessagesBySender(userId); // reactions by others on the messages about to go
             messageRepository.deleteBySenderId(userId);
             reactionRepository.deleteByUserId(userId);
             
