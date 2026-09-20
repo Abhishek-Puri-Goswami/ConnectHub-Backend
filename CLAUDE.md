@@ -283,6 +283,14 @@ scratch e2e scripts into a committed regression suite).
   `auto.offset.reset=earliest`. `.\cleanup-orphans.ps1` (report; `-Fix` deletes) checks every DB + Redis for leftovers and
   is part of the final regression check; media rows are report-only (files live on disk). Live-verified (28 checks) and the
   existing leftovers (3 empty rooms, stale unread/session keys) were cleaned with the script.
+- **#17 config repo — DONE**: `../connecthub-config` is inactive (no service reads it) but, if a service were ever wired to it,
+  its values would *override* the service's own — and several were stale or unsafe: 50 MB upload caps that would break
+  paid uploads, S3 settings for code that no longer exists, a gateway circuit-breaker/rate-limit/open-endpoints block the
+  gateway never reads, `env`/`*` actuator exposure with `show-details: always`, a Docker-only Zipkin host, a ₹99 price.
+  Cleaned, aligned with the services, and a README added there. `python check-config-drift.py` (needs `pip install
+  pyyaml`) now fails on any difference and is part of the final regression check. It also found a real bug: every
+  service defaulted `ZIPKIN_URL` to the Docker host `http://zipkin:9411` (worked only because `.env` overrides it) — now
+  `http://localhost:9411`.
 - **#14 endpoints the frontend calls that did not exist — DONE (no frontend change needed)**: (1) `POST
   /auth/forgot-password/phone` and (2) `POST /auth/verify-reset-otp/phone` — SMS password reset, mirroring the email flow
   (purpose `resetphone`, same reset-token JWT, generic "if an account exists" answer, only active LOCAL accounts with a
@@ -291,7 +299,7 @@ scratch e2e scripts into a committed regression suite).
   no room id/creator/members/code), any signed-in user, 404 for unknown/revoked codes. Because codes are only 8 hex chars,
   preview and join lookups are limited to 20/min per user (`InviteLookupLimiter`, 429). Live-verified (27 checks).
   Note: registration only verifies the email, so phone-reset only works for users who verified their phone number.
-- **Remaining**: Phase 5 P2 hygiene #17–#22, then the final regression/security retest (turn the scratch
+- **Remaining**: Phase 5 P2 hygiene #18–#22, then the final regression/security retest (turn the scratch
   attack/e2e scripts into a committed suite). Also open: refresh-token revocation on logout, phone-login account enumeration.
 
 ## Not yet done
