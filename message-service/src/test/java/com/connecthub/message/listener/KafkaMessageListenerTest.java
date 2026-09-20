@@ -46,11 +46,9 @@ class KafkaMessageListenerTest {
         Map<String, Object> payload = Map.of("roomId", "r1", "senderId", 1, "messageId", "m1");
         when(objectMapper.readValue(anyString(), eq(Map.class))).thenReturn(payload);
         when(messageService.existsById("m1")).thenReturn(true);
-        when(objectMapper.writeValueAsString(any())).thenReturn("payload");
-
         listener.processInboundMessage("{}", topic, partition, offset);
-        
-        verify(kafkaTemplate).send("chat.messages.outbound", "payload");
+
+        verifyNoInteractions(kafkaTemplate); // nothing is published for an already-persisted message
         verify(messageService, never()).send(any(), any());
     }
 
@@ -62,11 +60,10 @@ class KafkaMessageListenerTest {
         when(objectMapper.readValue(anyString(), eq(Map.class))).thenReturn(payload);
         Message saved = new Message();
         when(messageService.send(any(), eq("PRO"))).thenReturn(saved);
-        when(objectMapper.writeValueAsString(any())).thenReturn("saved");
-
         listener.processInboundMessage("{}", topic, partition, offset);
-        
-        verify(kafkaTemplate).send("chat.messages.outbound", "saved");
+
+        verify(messageService).send(any(), eq("PRO"));
+        verifyNoInteractions(kafkaTemplate); // there is no outbound topic any more
     }
 
     @Test
@@ -81,7 +78,6 @@ class KafkaMessageListenerTest {
         listener.processInboundMessage("{}", topic, partition, offset);
         
         verify(kafkaTemplate).send("chat.messages.rejected", "rate-limit");
-        verify(kafkaTemplate, never()).send("chat.messages.outbound", "rate-limit");
     }
 
     @Test

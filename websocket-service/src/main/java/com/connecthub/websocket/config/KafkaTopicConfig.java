@@ -31,12 +31,6 @@ public class KafkaTopicConfig {
     @Bean public NewTopic notificationsOfflineDlq() {
         return TopicBuilder.name("notifications.offline.dlq").partitions(1).replicas(1).build();
     }
-    @Bean public NewTopic roomUpdatesTimestamp() {
-        return TopicBuilder.name("room.updates.timestamp").partitions(3).replicas(1).build();
-    }
-    @Bean public NewTopic roomUpdatesTimestampDlq() {
-        return TopicBuilder.name("room.updates.timestamp.dlq").partitions(1).replicas(1).build();
-    }
     @Bean public NewTopic chatMessagesRejected() {
         return TopicBuilder.name("chat.messages.rejected").partitions(3).replicas(1).build();
     }

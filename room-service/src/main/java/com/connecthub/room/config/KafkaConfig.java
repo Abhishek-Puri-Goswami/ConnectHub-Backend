@@ -14,12 +14,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * P3.1/3.3 — Kafka configuration for room-service:
- * - Topic declarations (room.updates.timestamp + DLQ)
- * - Idempotent producer for timestamp update events
+ * Kafka configuration for room-service.
  *
- * room-service only produces Kafka messages (consumed by message-service for
- * room last-message-at updates), so no consumer factory is needed here.
+ * room-service only PRODUCES events (room.created, room.deleted), so there is no consumer factory here except the
+ * listener that removes deleted accounts from rooms. Topics it publishes are declared here; every service that
+ * consumes them declares them identically (see CLAUDE.md, #12).
  */
 @Configuration
 @Slf4j
@@ -29,12 +28,6 @@ public class KafkaConfig {
     private String bootstrapServers;
 
     // ── Topics ─────────────────────────────────────────────────────────────
-    @Bean public NewTopic roomUpdatesTimestamp() {
-        return TopicBuilder.name("room.updates.timestamp").partitions(3).replicas(1).build();
-    }
-    @Bean public NewTopic roomUpdatesTimestampDlq() {
-        return TopicBuilder.name("room.updates.timestamp.dlq").partitions(1).replicas(1).build();
-    }
     /** Published when a room is deleted (payload: the room id) so other services can remove its data. */
     @Bean public NewTopic roomDeleted() {
         return TopicBuilder.name("room.deleted").partitions(3).replicas(1).build();

@@ -35,8 +35,8 @@ import java.util.Map;
  *
  * KAFKA TOPICS:
  *   "chat.messages.inbound"  — each chat message payload (JSON string)
- *   "room.updates.timestamp" — a lightweight event with roomId + lastMessageAt
- *     used by room-service to update the room's lastMessageAt column.
+ *   (The room's lastMessageAt is updated by DeliveryService.updateRoomTimestamp(), a direct call to
+ *   room-service — there is no Kafka topic for it.)
  *
  * WHY A JSON STRING RATHER THAN AN OBJECT:
  *   kafkaTemplate.send() is typed as KafkaTemplate<String, Object>. We serialize
@@ -82,22 +82,4 @@ public class MessagePersistenceService {
         }
     }
 
-    /**
-     * updateRoomTimestamp — publishes a lightweight event to update a room's
-     * lastMessageAt timestamp asynchronously via Kafka.
-     * Room-service consumes this event and updates the room record in MySQL.
-     * This is used as a secondary/fallback alongside the direct Feign call
-     * in DeliveryService.updateRoomTimestamp().
-     */
-    public void updateRoomTimestamp(String roomId) {
-        try {
-            Map<String, Object> event = new HashMap<>();
-            event.put("roomId", roomId);
-            event.put("lastMessageAt", System.currentTimeMillis());
-            String json = objectMapper.writeValueAsString(event);
-            kafkaTemplate.send("room.updates.timestamp", json);
-        } catch (Exception e) {
-            log.debug("Failed to publish room timestamp update: {}", e.getMessage());
-        }
-    }
 }

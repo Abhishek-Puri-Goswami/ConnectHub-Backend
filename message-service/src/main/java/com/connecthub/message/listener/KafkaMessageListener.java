@@ -34,15 +34,14 @@ import java.util.Map;
  *   1. VALIDATION — reject messages with null senderId or roomId (malformed events).
  *
  *   2. IDEMPOTENCY — check if the messageId already exists in the database. If it does,
- *      the Feign call already persisted it; skip re-insertion but still emit to
- *      "chat.messages.outbound" so downstream consumers get the event. This prevents
+ *      the Feign call already persisted it; skip re-insertion. This prevents
  *      double-counting rate limits on re-consumed messages.
  *
  *   3. TIER RATE LIMIT — MessageService.send() enforces the per-minute message cap
  *      based on the subscription tier. If exceeded, a rate limit rejection is emitted.
  *
- *   4. PERSISTENCE + OUTBOUND — save the message via MessageService.send() and emit
- *      the saved entity to "chat.messages.outbound" for any downstream consumers.
+ *   4. PERSISTENCE — save the message via MessageService.send(). (There is no outbound
+ *      topic: live delivery already happens in websocket-service over Redis pub/sub.)
  *
  * KAFKA RELIABILITY:
  *   - containerFactory is configured with retry (3 attempts) + Dead Letter Queue.
@@ -71,7 +70,7 @@ public class KafkaMessageListener {
      *
      * HOW IT WORKS:
      *   Deserializes the JSON payload, validates required fields, runs idempotency
-     *   and cap checks in order, then persists the message and emits the outbound event.
+     *   and cap checks in order, then persists the message.
      *   Each step is logged with topic/partition/offset for distributed tracing.
      *
      * @SneakyThrows wraps checked exceptions so they propagate as unchecked
@@ -107,13 +106,10 @@ public class KafkaMessageListener {
 
         /*
          * Idempotency check before any counting: if the message was already saved by the
-         * synchronous Feign call from websocket-service, skip the insert. Still emit
-         * to outbound so downstream consumers (analytics, search index) get the event.
+         * synchronous Feign call from websocket-service, skip the insert.
          */
         if (messageId != null && messageService.existsById(messageId)) {
-            log.debug("Message {} already persisted — emitting outbound only ({}[{}]@{})",
-                    messageId, topic, partition, offset);
-            kafkaTemplate.send(AppConstants.TOPIC_MESSAGES_OUTBOUND, objectMapper.writeValueAsString(payload));
+            log.debug("Message {} already persisted — skipping ({}[{}]@{})", messageId, topic, partition, offset);
             return;
         }
 
@@ -129,7 +125,6 @@ public class KafkaMessageListener {
         try {
             String tier = SubscriptionTierLimits.normalizeTier(subscriptionTier);
             Message saved = messageService.send(msg, tier);
-            kafkaTemplate.send("chat.messages.outbound", objectMapper.writeValueAsString(saved));
             log.info("Processed message {} for room {} ({}[{}]@{})",
                     messageId, roomId, topic, partition, offset);
         } catch (TooManyRequestsException ex) {

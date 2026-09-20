@@ -49,12 +49,4 @@ class MessagePersistenceServiceTest {
         verifyNoInteractions(kafkaTemplate);
     }
 
-    @Test
-    void updateRoomTimestamp_publishesToKafka() throws Exception {
-        when(objectMapper.writeValueAsString(any())).thenReturn("{\"roomId\":\"r1\"}");
-
-        service.updateRoomTimestamp("r1");
-
-        verify(kafkaTemplate).send(eq("room.updates.timestamp"), anyString());
-    }
 }

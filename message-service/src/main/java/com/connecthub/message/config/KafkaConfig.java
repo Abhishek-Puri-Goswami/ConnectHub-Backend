@@ -24,7 +24,7 @@ import java.util.Map;
 
 /**
  * Kafka configuration for message-service:
- * - Topics: chat.messages.inbound (+DLQ), chat.messages.outbound, chat.messages.rejected
+ * - Topics: chat.messages.inbound (+DLQ), chat.messages.rejected
  * - Idempotent producer
  * - Consumer with 3-retry + DLQ routing (matching all other services)
  */
@@ -42,9 +42,6 @@ public class KafkaConfig {
     }
     @Bean public NewTopic chatMessagesInboundDlq() {
         return TopicBuilder.name(AppConstants.TOPIC_MESSAGES_INBOUND_DLQ).partitions(1).replicas(1).build();
-    }
-    @Bean public NewTopic chatMessagesOutbound() {
-        return TopicBuilder.name(AppConstants.TOPIC_MESSAGES_OUTBOUND).partitions(3).replicas(1).build();
     }
     @Bean public NewTopic chatMessagesRejected() {
         return TopicBuilder.name(AppConstants.TOPIC_MESSAGES_REJECTED).partitions(3).replicas(1).build();

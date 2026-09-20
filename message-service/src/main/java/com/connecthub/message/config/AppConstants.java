@@ -46,9 +46,6 @@ public final class AppConstants {
     /** Dead-letter queue for messages that could not be processed after all retries. */
     public static final String TOPIC_MESSAGES_INBOUND_DLQ = "chat.messages.inbound.dlq";
 
-    /** Persisted messages broadcast to downstream consumers (websocket fanout, search index). */
-    public static final String TOPIC_MESSAGES_OUTBOUND = "chat.messages.outbound";
-
     /** Messages rejected due to rate limits or validation failures (returned to sender). */
     public static final String TOPIC_MESSAGES_REJECTED = "chat.messages.rejected";
 

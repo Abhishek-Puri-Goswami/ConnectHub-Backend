@@ -291,6 +291,17 @@ scratch e2e scripts into a committed regression suite).
   pyyaml`) now fails on any difference and is part of the final regression check. It also found a real bug: every
   service defaulted `ZIPKIN_URL` to the Docker host `http://zipkin:9411` (worked only because `.env` overrides it) — now
   `http://localhost:9411`.
+- **#18 dead Kafka topics — DONE (removed, not wired up)**: `room.updates.timestamp` (produced by websocket-service, comments
+  claimed room-service consumed it — nothing did; the room timestamp is updated by a direct call in `DeliveryService`),
+  `chat.messages.outbound` (produced by message-service for "analytics/search" consumers that never existed), and
+  `audit.events` (consumed by notification-service, produced by nobody; admin audit logs live in auth-service's own
+  table and `/auth/admin/audit`). Removed the producers, listeners, topic beans, the notification-service `AuditLog`
+  entity/repo/`/internal/audit-logs` endpoint, and their tests; Flyway `V5` drops notification-service's unused
+  `audit_logs` table. The three topics still exist in the broker (deleting topics on Windows risks the file-locking crash
+  described in Native_Redis_Kafka.md) — they are harmless and empty of new traffic. Live topics now: chat.messages.inbound
+  (+dlq), chat.messages.rejected (+dlq), room.created, room.deleted, auth.user.deleted, notifications.offline (+dlq),
+  user.subscription.status (+dlq), email.events (+dlq). Known gap left alone: the inbound Kafka fallback persists
+  without re-checking room membership (websocket-service checks before publishing).
 - **#14 endpoints the frontend calls that did not exist — DONE (no frontend change needed)**: (1) `POST
   /auth/forgot-password/phone` and (2) `POST /auth/verify-reset-otp/phone` — SMS password reset, mirroring the email flow
   (purpose `resetphone`, same reset-token JWT, generic "if an account exists" answer, only active LOCAL accounts with a
@@ -299,7 +310,7 @@ scratch e2e scripts into a committed regression suite).
   no room id/creator/members/code), any signed-in user, 404 for unknown/revoked codes. Because codes are only 8 hex chars,
   preview and join lookups are limited to 20/min per user (`InviteLookupLimiter`, 429). Live-verified (27 checks).
   Note: registration only verifies the email, so phone-reset only works for users who verified their phone number.
-- **Remaining**: Phase 5 P2 hygiene #18–#22, then the final regression/security retest (turn the scratch
+- **Remaining**: Phase 5 P2 hygiene #19–#22, then the final regression/security retest (turn the scratch
   attack/e2e scripts into a committed suite). Also open: refresh-token revocation on logout, phone-login account enumeration.
 
 ## Not yet done
